@@ -5,7 +5,7 @@
 	"publisher": "eissapk",
 	"icon": "assets/logo.png",
 	"author": "Eissa Saber",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"engines": {
 		"vscode": "^0.10.5"
 	},
