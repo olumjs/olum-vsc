@@ -1,64 +1,69 @@
 {
-  "name": "olum",
-  "displayName": "olum",
-  "description": "Code snippets and syntax highlighter",
-  "publisher": "eissapk",
-  "icon": "assets/logo.png",
-  "author": "Eissa Saber",
-  "version": "0.4.0",
-  "engines": {
-    "vscode": "^0.10.5"
-  },
-  "categories": [
-    "Snippets",
-    "Other"
-  ],
-  "activationEvents": [
-    "*"
-  ],
+	"name": "olum",
+	"displayName": "olum",
+	"description": "Code snippets and syntax highlighter",
+	"publisher": "eissapk",
+	"icon": "assets/logo.png",
+	"author": "Eissa Saber",
+	"version": "0.4.0",
+	"engines": {
+		"vscode": "^0.10.5"
+	},
+	"categories": [
+		"Snippets",
+		"Other"
+	],
+	"activationEvents": [
+		"*"
+	],
 	"main": "bin/index.js",
-  "contributes": {
-    "grammars": [
-      {
-        "scopeName": "scss.injection",
-        "path": "./syntax/scss.injection.json",
-        "injectTo": [
-          "text.html"
-        ],
-        "embeddedLanguages": {
-          "source.css.scss": "scss",
-          "source.sass": "sass"
-        }
-      }
-    ],
-    "snippets": [
-      {
-        "language": "html",
-        "path": "./snippets/snippets.code-snippets"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets.code-snippets"
-      }
-    ]
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/olumjs/olum-vsc.git"
-  },
-  "bugs": {
-    "url": "https://github.com/olumjs/olum-vsc/issues"
-  },
-  "homepage": "https://github.com/olumjs/olum-vsc#readme",
-  "scripts": {
-    "postinstall": "node ./node_modules/vscode/bin/install",
-    "test": "node ./node_modules/vscode/bin/test"
-  },
-  "devDependencies": {
-    "typescript": "^2.6.1",
-    "vscode": "^1.1.6",
-    "eslint": "^4.11.0",
-    "@types/node": "^7.0.43",
-    "@types/mocha": "^2.2.42"
-  }
+	"contributes": {
+		"grammars": [
+			{
+				"scopeName": "scss.injection",
+				"path": "./syntax/scss.injection.json",
+				"injectTo": [
+					"text.html"
+				],
+				"embeddedLanguages": {
+					"source.css.scss": "scss",
+					"source.sass": "sass"
+				}
+			}
+		],
+		"snippets": [
+			{
+				"language": "html",
+				"path": "./snippets/snippets.code-snippets"
+			},
+			{
+				"language": "javascript",
+				"path": "./snippets/snippets.code-snippets"
+			}
+		]
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/olumjs/olum-vsc.git"
+	},
+	"bugs": {
+		"url": "https://github.com/olumjs/olum-vsc/issues"
+	},
+	"homepage": "https://github.com/olumjs/olum-vsc#readme",
+	"scripts": {
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"test": "node ./node_modules/vscode/bin/test"
+	},
+	"devDependencies": {
+		"typescript": "^2.6.1",
+		"vscode": "^1.1.6",
+		"eslint": "^4.11.0",
+		"@types/node": "^7.0.43",
+		"@types/mocha": "^2.2.42"
+	},
+	"__metadata": {
+		"installedTimestamp": 1779869531202,
+		"targetPlatform": "undefined",
+		"size": 34304
+	}
 }
