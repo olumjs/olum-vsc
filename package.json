@@ -18,6 +18,19 @@
 	],
 	"main": "bin/index.js",
 	"contributes": {
+		"commands": [
+			{
+				"command": "olum.fixComponentCase",
+				"title": "Fix Component Case",
+				"category": "Olum"
+			}
+		],
+		"languages": [
+			{
+				"id": "html",
+				"configuration": "./language-configuration.json"
+			}
+		],
 		"grammars": [
 			{
 				"scopeName": "scss.injection",
