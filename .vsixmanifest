@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 	<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 		<Metadata>
-			<Identity Language="en-US" Id="olum" Version="0.4.0" Publisher="eissapk" />
+			<Identity Language="en-US" Id="olum" Version="1.0.0" Publisher="eissapk" />
 			<DisplayName>olum</DisplayName>
 			<Description xml:space="preserve">Code snippets and syntax highlighter</Description>
 			<Tags>snippet</Tags>
