@@ -11,7 +11,3 @@
 | forof    |  Create for of loop
 | show     |  Create show statement
 | com      |  Create component tag
-| olum     |  Create olum instance
-| olumc    |  Create component
-| olumr    |  Create router   
-| olums    |  Create service
