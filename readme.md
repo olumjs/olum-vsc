@@ -144,3 +144,11 @@ Squiggly warnings are shown for:
 <Card {user} user={data} />
 <!--         ^^^^ Duplicate prop 'user' -->
 ```
+
+---
+
+## Security
+
+- **No network calls** — the extension never transmits data outside your machine.
+- **No code execution** — document text is parsed but never evaluated.
+- **Workspace-sandboxed file resolution** — import specifiers like `../../.ssh/id_rsa` are rejected before any filesystem access. Go-to-definition only resolves paths that fall inside the open workspace folders.

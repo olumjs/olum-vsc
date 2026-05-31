@@ -21,12 +21,11 @@ import {
   ComponentTag,
   Expression,
   FlowKind,
+  FLOW_TAG_NAMES,
   FlowTag,
   Region,
   ScanResult,
 } from "./types";
-
-const FLOW_KEYWORDS: FlowKind[] = ["else-if", "if", "for", "show", "else"];
 
 const isUpper = (c: string): boolean => c >= "A" && c <= "Z";
 const isTagNameChar = (c: string): boolean => !!c && !/[\s>/]/.test(c);
@@ -168,7 +167,7 @@ export function scan(text: string): ScanResult {
 
 /** Map a tag name to a flow kind, respecting exact matches only. */
 function asFlowKind(name: string): FlowKind | null {
-  for (const kw of FLOW_KEYWORDS) {
+  for (const kw of FLOW_TAG_NAMES) {
     if (name === kw) return kw;
   }
   return null;

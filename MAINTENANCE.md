@@ -57,7 +57,7 @@ src/
 │   └─ scriptScope.ts       Builds the symbol table from <script> regions
 ├─ components/
 │   ├─ imports.ts           Component imports derived from the symbol table
-│   └─ resolver.ts          Component name → source file on disk
+│   └─ resolver.ts          Component name → source file on disk (workspace-sandboxed)
 ├─ language/
 │   ├─ resolve.ts           "What symbol is at this offset?" + reference ranges
 │   ├─ services.ts          Cached { model, symbols } per document
@@ -153,11 +153,11 @@ result. Everything else inside `<script>` is ignored.
 
 | Task | File(s) |
 |---|---|
-| Change a color | `utils/colors.ts` |
-| Add a flow tag (e.g. `<while>`) | add to `FLOW_KEYWORDS` in `parser/scanner.ts` (and a snippet if desired) |
+| **Change a color** | Edit `olum.colors.*` in VS Code settings (changes apply immediately, no recompile). To change defaults, edit `DEFAULTS` in `utils/colors.ts`. |
+| **Add a new flow tag** (e.g. `<while>`) | Add the name to `FLOW_TAG_NAMES` in `parser/types.ts`. The parser, highlighter, formatter auto-repair, and auto-close guard all update automatically. Add a snippet too if desired. |
 | Recognise a new declaration form for hover/def | `scanner/scriptScope.ts` |
 | Adjust how identifiers are extracted from expressions | `parser/expression.ts` |
-| Change component file resolution | `components/resolver.ts` |
+| Change component file resolution | `components/resolver.ts` — all resolved paths are validated against `vscode.workspace.workspaceFolders` to prevent path-traversal via crafted import specs |
 | Add a diagnostic | `diagnostics/diagnostics.ts` |
 | Add expression token coloring | `highlighting/exprTokens.ts` + a bucket in `highlighting/decorations.ts`/`highlighter.ts` |
 | Change formatter behavior | `language/formatting/formattingProvider.ts` |

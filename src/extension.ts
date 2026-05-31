@@ -7,6 +7,7 @@
  *   - diagnostics (debounced)
  *   - "Fix Component Case" command + auto-fix for formatter damage
  *   - a guard that removes spurious auto-closed tags inserted inside `{…}`
+ *   - live color updates when `olum.colors.*` settings change
  *
  * All heavy work goes through `getModel`, which parses each document at most
  * once per version, so every feature shares one parse.
@@ -24,14 +25,22 @@ import { registerHoverProvider } from "./language/hover/hoverProvider";
 import { registerReferenceProvider } from "./language/references/referenceProvider";
 import { registerRenameProvider } from "./language/rename/renameProvider";
 import { getModel, invalidate } from "./parser/documentModel";
-import { colors } from "./utils/colors";
+import { FLOW_TAG_NAMES } from "./parser/types";
+import { escapeRegExp } from "./utils/helpers";
+import { getColors } from "./utils/colors";
 import { createKeyedDebouncer } from "./utils/debounce";
 import { isHtmlDocument, isHtmlEditor } from "./utils/helpers";
+
+// Built once from FLOW_TAG_NAMES so adding a new tag name to types.ts is all
+// that is needed — this regex updates automatically.
+const SPURIOUS_CLOSE_RE = new RegExp(
+  `^<\\/(?:[A-Z][A-Za-z0-9]*|${FLOW_TAG_NAMES.map(escapeRegExp).join("|")})>$`
+);
 
 let decorations: DecorationSet | null = null;
 
 export function activate(context: vscode.ExtensionContext): void {
-  decorations = createDecorations(colors);
+  decorations = createDecorations(getColors());
 
   const highlightDebouncer = createKeyedDebouncer(60);
   const diagDebouncer = createKeyedDebouncer(250);
@@ -82,6 +91,14 @@ export function activate(context: vscode.ExtensionContext): void {
       invalidate(doc);
       diagCollection.delete(doc.uri);
     }),
+
+    // ── live color updates ────────────────────────────────────────────────────
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration("olum.colors")) return;
+      if (decorations) disposeDecorations(decorations);
+      decorations = createDecorations(getColors());
+      vscode.window.visibleTextEditors.forEach(runHighlight);
+    }),
   );
 
   // ── fix component case command ───────────────────────────────────────────────
@@ -128,7 +145,7 @@ function scheduleAutoFix(
 function removeSpuriousAutoClose(event: vscode.TextDocumentChangeEvent): void {
   if (!isHtmlDocument(event.document)) return;
   for (const change of event.contentChanges) {
-    if (!/^<\/(?:[A-Z][A-Za-z0-9]*|if|else(?:-if)?|for|show)>$/.test(change.text)) continue;
+    if (!SPURIOUS_CLOSE_RE.test(change.text)) continue;
     const insertPos = change.range.start;
     const before = event.document.lineAt(insertPos.line).text.slice(0, insertPos.character);
     if (before.lastIndexOf("{") <= before.lastIndexOf("}")) continue; // not inside {}

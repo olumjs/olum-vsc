@@ -59,6 +59,71 @@
 			"[html]": {
 				"editor.defaultFormatter": "eissapk.olum"
 			}
+		},
+		"configuration": {
+			"title": "Olum",
+			"properties": {
+				"olum.colors.component": {
+					"type": "string",
+					"default": "#FFCB6B",
+					"description": "Color for component tag names (<Header />, </Header>)."
+				},
+				"olum.colors.flow": {
+					"type": "string",
+					"default": "#89DDFF",
+					"description": "Color for flow tag names and their angle brackets (<if>, <for>, <else>, <show>, …)."
+				},
+				"olum.colors.propName": {
+					"type": "string",
+					"default": "#C792EA",
+					"description": "Color for prop/attribute names (the key before = or {})."
+				},
+				"olum.colors.propEquals": {
+					"type": "string",
+					"default": "#89DDFF",
+					"description": "Color for the = separator between a prop name and its value."
+				},
+				"olum.colors.stringQuote": {
+					"type": "string",
+					"default": "#89DDFF",
+					"description": "Color for the opening and closing quote characters of a string prop."
+				},
+				"olum.colors.stringValue": {
+					"type": "string",
+					"default": "#C3E88D",
+					"description": "Color for the text content inside a quoted string prop."
+				},
+				"olum.colors.brace": {
+					"type": "string",
+					"default": "#ffd700",
+					"description": "Color for the { } braces wrapping an expression value."
+				},
+				"olum.colors.number": {
+					"type": "string",
+					"default": "#F78C6C",
+					"description": "Color for numeric literals inside expressions."
+				},
+				"olum.colors.boolean": {
+					"type": "string",
+					"default": "#ff9cac",
+					"description": "Color for boolean literals (true, false) inside expressions."
+				},
+				"olum.colors.null": {
+					"type": "string",
+					"default": "#89DDFF",
+					"description": "Color for null and undefined inside expressions."
+				},
+				"olum.colors.variable": {
+					"type": "string",
+					"default": "#babed8",
+					"description": "Color for variable/identifier references inside expressions."
+				},
+				"olum.colors.forLocal": {
+					"type": "string",
+					"default": "#82AAFF",
+					"description": "Color for loop-local variables introduced by <for each={item of list}>."
+				}
+			}
 		}
 	},
 	"repository": {
