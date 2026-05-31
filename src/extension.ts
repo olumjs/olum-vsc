@@ -13,12 +13,13 @@
  */
 
 import * as vscode from "vscode";
-import { caseFixEdits, propQuoteFix } from "./commands/fixes";
+import { caseFixEdits, propQuoteFix, shorthandFix } from "./commands/fixes";
 import { updateDiagnostics } from "./diagnostics/diagnostics";
 import { createDecorations, DecorationSet, disposeDecorations } from "./highlighting/decorations";
 import { highlight } from "./highlighting/highlighter";
 import { registerCompletionProvider } from "./language/completion/completionProvider";
 import { registerDefinitionProvider } from "./language/definitions/definitionProvider";
+import { registerFormattingProvider } from "./language/formatting/formattingProvider";
 import { registerHoverProvider } from "./language/hover/hoverProvider";
 import { registerReferenceProvider } from "./language/references/referenceProvider";
 import { registerRenameProvider } from "./language/rename/renameProvider";
@@ -57,6 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
   registerReferenceProvider(context);
   registerRenameProvider(context);
   registerCompletionProvider(context);
+  registerFormattingProvider(context);
 
   // ── editor / document events ────────────────────────────────────────────────
   context.subscriptions.push(
@@ -113,7 +115,7 @@ function scheduleAutoFix(
   debouncer.schedule(doc.uri.toString(), () => {
     const editor = vscode.window.visibleTextEditors.find((e) => e.document === doc);
     if (!editor) return;
-    const edits = [...caseFixEdits(doc), ...propQuoteFix(doc)];
+    const edits = [...caseFixEdits(doc), ...propQuoteFix(doc), ...shorthandFix(doc)];
     if (edits.length) editor.edit((eb) => edits.forEach((e) => eb.replace(e.range, e.newText)));
   });
 }

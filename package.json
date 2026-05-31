@@ -54,7 +54,12 @@
 				"language": "javascript",
 				"path": "./snippets/snippets.code-snippets"
 			}
-		]
+		],
+		"configurationDefaults": {
+			"[html]": {
+				"editor.defaultFormatter": "eissapk.olum"
+			}
+		}
 	},
 	"repository": {
 		"type": "git",
@@ -71,8 +76,12 @@
 		"typecheck": "tsc -p ./ --noEmit"
 	},
 	"devDependencies": {
+		"@types/js-beautify": "^1.14.3",
 		"@types/node": "^18.19.0",
 		"@types/vscode": "^1.75.0",
 		"typescript": "^5.4.0"
+	},
+	"dependencies": {
+		"js-beautify": "^1.15.4"
 	}
 }

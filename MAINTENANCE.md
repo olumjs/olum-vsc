@@ -1,15 +1,15 @@
 # Olum VS Code Extension — Maintenance Guide
 
-The extension provides syntax highlighting, IntelliSense (hover, go-to-definition,
-references, rename, completion) and diagnostics for the [olum](https://github.com/olumjs)
-framework, whose components are `.html` files with template markup plus a
-`<script>` block.
+The extension provides syntax highlighting, formatting, IntelliSense (hover,
+go-to-definition, references, rename, completion) and diagnostics for the
+[olum](https://github.com/olumjs) framework, whose components are `.html` files
+with template markup plus a `<script>` block.
 
 It is written in **TypeScript** and compiled to `out/`. The compiled
 `out/extension.js` is the entry point (`main` in `package.json`).
 
 ```bash
-npm install      # install dev deps (typescript, @types/vscode, @types/node)
+npm install      # install deps (typescript, @types/vscode, @types/node, js-beautify, …)
 npm run compile  # build src/ → out/
 npm run watch    # incremental rebuilds while developing
 npm run typecheck
@@ -29,8 +29,11 @@ An olum component file is treated like a React `.jsx` file:
   `props` and any `<for>` locals in scope.
 
 `<script>` and `<style>` bodies are **never** treated as template: no
-highlighting, hover, definition, references, rename or completion fire there.
-But the `<script>` block **is** the symbol source that powers navigation *from*
+highlighting, hover, references, rename or completion fire there. The one
+exception is **go-to-definition on import path strings** — Ctrl+Click on
+`"./Header"` inside a `<script>` block navigates to the component file.
+
+The `<script>` block **is** the symbol source that powers navigation *from*
 the template.
 
 ---
@@ -59,14 +62,17 @@ src/
 │   ├─ resolve.ts           "What symbol is at this offset?" + reference ranges
 │   ├─ services.ts          Cached { model, symbols } per document
 │   ├─ hover/               Hover provider
-│   ├─ definitions/         Go-to-definition provider
+│   ├─ definitions/         Go-to-definition provider (template + import paths)
 │   ├─ references/          Find-references provider
 │   ├─ rename/              Rename provider
-│   └─ completion/          Completion provider (identifiers + components)
+│   ├─ completion/          Completion provider (identifiers + components)
+│   └─ formatting/          Document formatting provider (js-beautify based)
 ├─ highlighting/
 │   ├─ decorations.ts       TextEditorDecorationType per color bucket
 │   ├─ exprTokens.ts        Expression tokenizer for coloring
 │   └─ highlighter.ts       Maps the model → decoration ranges
+├─ commands/
+│   └─ fixes.ts             Post-formatter auto-repair edits
 ├─ diagnostics/
 │   └─ diagnostics.ts       Missing-import + duplicate-prop warnings
 ├─ utils/
@@ -97,6 +103,52 @@ converted to `vscode.Position`/`Range` only at the edges (`utils/ranges.ts`).
 
 ---
 
+## Formatting
+
+The extension registers a `DocumentFormattingEditProvider` (`language/formatting/formattingProvider.ts`)
+that uses **js-beautify** to format HTML files. This is necessary because
+Prettier — the most common HTML formatter — misparses olum-specific attribute
+syntax like `each={todo of list}` (unquoted value with spaces) and produces
+completely broken output.
+
+js-beautify leaves all `{...}` attribute forms intact and only adjusts
+indentation and whitespace. The formatter reads VS Code's `html.format.*`
+settings so user preferences are respected.
+
+`package.json` sets `configurationDefaults` so the Olum formatter is the
+default for HTML files when the extension is active — no manual configuration
+needed by users.
+
+### Post-formatter auto-repair (`commands/fixes.ts`)
+
+Even with the custom formatter, a user might run Prettier or another generic
+formatter manually. The extension listens to `onDidChangeTextDocument` and runs
+three repair passes (debounced 300 ms) after every change:
+
+| Function | What it fixes |
+|---|---|
+| `propQuoteFix` | `attr="{expr}"` → `attr={expr}` (quotes wrapped around `{}` by formatter) |
+| `shorthandFix` | `{todo}=""` → `{todo}` (empty value added to shorthand prop) |
+| `caseFixEdits` | `<header>` → `<Header>` (component tag lowercased by formatter) |
+
+All three skip `<script>`/`<style>` regions and return `[]` when there is
+nothing to fix, so the edit loop terminates after one pass.
+
+---
+
+## Go-to-definition on import paths
+
+`language/definitions/definitionProvider.ts` has a special pre-check that runs
+**before** the raw-region guard. If the cursor offset falls within the module
+specifier string of any import declaration (stored as `specStart`/`specEnd` on
+`Declaration` in `scanner/symbols.ts`), it resolves the path and returns the
+file location.
+
+This is the only place where `<script>` block content produces a definition
+result. Everything else inside `<script>` is ignored.
+
+---
+
 ## Where to make common changes
 
 | Task | File(s) |
@@ -108,6 +160,8 @@ converted to `vscode.Position`/`Range` only at the edges (`utils/ranges.ts`).
 | Change component file resolution | `components/resolver.ts` |
 | Add a diagnostic | `diagnostics/diagnostics.ts` |
 | Add expression token coloring | `highlighting/exprTokens.ts` + a bucket in `highlighting/decorations.ts`/`highlighter.ts` |
+| Change formatter behavior | `language/formatting/formattingProvider.ts` |
+| Add a post-formatter repair | `commands/fixes.ts` + wire into `scheduleAutoFix` in `extension.ts` |
 
 ---
 

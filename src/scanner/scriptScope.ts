@@ -46,20 +46,25 @@ function extractRegion(src: string, base: number, add: (d: Declaration) => void)
   const importRe = /\bimport\s+([A-Za-z_$][\w$]*)\s+from\s*['"]([^'"]+)['"]/g;
   while ((m = importRe.exec(src))) {
     const nameStart = base + m.index + m[0].indexOf(m[1]);
+    const specStart = base + m.index + m[0].indexOf(m[2]);
     add({ name: m[1], kind: "import", nameStart, nameEnd: nameStart + m[1].length,
-      importSpec: m[2], doc: docAbove(src, m.index) });
+      importSpec: m[2], specStart, specEnd: specStart + m[2].length,
+      doc: docAbove(src, m.index) });
   }
 
   // ── named imports: import { a, b } from "spec" ────────────────────────────
   const namedRe = /\bimport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
   while ((m = namedRe.exec(src))) {
     const groupStart = m.index + m[0].indexOf("{") + 1;
+    const specStart = base + m.index + m[0].indexOf(m[2]);
+    const specEnd = specStart + m[2].length;
     const inner = m[1];
     const idRe = /([A-Za-z_$][\w$]*)/g;
     let idm: RegExpExecArray | null;
     while ((idm = idRe.exec(inner))) {
       const nameStart = base + groupStart + idm.index;
-      add({ name: idm[1], kind: "import", nameStart, nameEnd: nameStart + idm[1].length, importSpec: m[2] });
+      add({ name: idm[1], kind: "import", nameStart, nameEnd: nameStart + idm[1].length,
+        importSpec: m[2], specStart, specEnd });
     }
   }
 

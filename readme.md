@@ -2,7 +2,7 @@
 
 <h1 align="center">Olumjs</h1>
 
-VS Code extension for the [olumjs](https://github.com/olumjs) framework. Provides syntax highlighting, navigation, hover info, auto-complete, and diagnostics for `.html` component files.
+VS Code extension for the [olumjs](https://github.com/olumjs) framework. Provides syntax highlighting, formatting, navigation, hover info, auto-complete, and diagnostics for `.html` component files.
 
 ---
 
@@ -33,6 +33,32 @@ VS Code extension for the [olumjs](https://github.com/olumjs) framework. Provide
 
 ---
 
+## Formatting
+
+The extension registers its own HTML formatter (powered by [js-beautify](https://github.com/beautify-web/js-beautify)) that understands olum template syntax. Generic formatters like Prettier mangle framework attributes — for example, `each={todo of list}` (unquoted value with spaces) gets split into multiple broken attributes.
+
+The Olum formatter is set as the default for HTML files automatically when the extension is active. To set it explicitly in a workspace, add to `.vscode/settings.json`:
+
+```json
+"[html]": {
+  "editor.defaultFormatter": "eissapk.olum"
+}
+```
+
+The formatter respects VS Code's existing `html.format.*` settings (indent size, wrap line length, wrap attributes, etc.).
+
+### Formatter auto-repair
+
+After any formatting pass the extension also runs a set of auto-repairs to undo damage that a generic formatter may still cause:
+
+| Damage | Repair |
+|--------|--------|
+| `title="{expr}"` → quotes wrapped around `{}` | Unwrapped back to `title={expr}` |
+| `{todo}=""` → empty value added to shorthand prop | Stripped back to `{todo}` |
+| `<header>` → component tag lowercased | Restored to `<Header>` |
+
+---
+
 ## Navigation (Ctrl+Click)
 
 | Location | Action |
@@ -42,8 +68,9 @@ VS Code extension for the [olumjs](https://github.com/olumjs) framework. Provide
 | Variable in prop — `<Comp val={title} />` | Jumps to `title` declaration |
 | Property access — `<Comp val={r.input} />` | Jumps to `input:` inside the `r` object |
 | Shorthand prop — `<Comp {title} />` | Jumps to `title` declaration |
+| `<for>` local — `{todo}` inside a loop body | Jumps to the `each={todo of …}` binding |
 
-> Clicking the component name in an import line (e.g. `Header` in `import Header from …`) does nothing — use Ctrl+Click on the path string instead.
+> Ctrl+Click on the **path string** in an import (e.g. `"./Header"`) opens the file. Clicking the imported name (`Header`) itself does nothing — the `<script>` block is not analysed for template navigation.
 
 ---
 

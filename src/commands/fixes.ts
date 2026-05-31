@@ -5,8 +5,10 @@
  *                      restores PascalCase for every imported component.
  *   - propQuoteFix   — a formatter may wrap `onclick={fn}` as `onclick="{fn}"`;
  *                      this unwraps the quotes (brace-depth aware).
+ *   - shorthandFix   — a formatter may add an empty value to shorthand props,
+ *                      turning `{todo}` into `{todo}=""`; this strips it back.
  *
- * Both skip `<script>`/`<style>` regions and return [] when nothing needs fixing
+ * All skip `<script>`/`<style>` regions and return [] when nothing needs fixing
  * so the auto-fix loop terminates after a single pass.
  */
 
@@ -59,5 +61,46 @@ export function propQuoteFix(document: vscode.TextDocument): vscode.TextEdit[] {
       re.lastIndex = j + 1;
     }
   }
+  return edits;
+}
+
+export function shorthandFix(document: vscode.TextDocument): vscode.TextEdit[] {
+  const { model } = analyze(document);
+  const text = document.getText();
+  const edits: vscode.TextEdit[] = [];
+
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== "{") { i++; continue; }
+    if (isInRawRegion(model, i)) { i++; continue; }
+
+    // Only match in attribute context: { must follow a space or tab
+    const prev = text[i - 1];
+    if (prev !== " " && prev !== "\t") { i++; continue; }
+
+    // Brace-depth scan to find matching }
+    let depth = 1;
+    let j = i + 1;
+    while (j < text.length && depth > 0) {
+      if (text[j] === "{") depth++;
+      else if (text[j] === "}") depth--;
+      j++;
+    }
+    if (depth !== 0) { i = j; continue; }
+    // j now points to the character right after the closing }
+
+    // Check for ="" or ='' immediately after the closing }
+    if (j + 2 < text.length && text[j] === "=") {
+      const q = text[j + 1];
+      if ((q === '"' || q === "'") && text[j + 2] === q) {
+        edits.push(vscode.TextEdit.delete(rangeFromOffsets(document, j, j + 3)));
+        i = j + 3;
+        continue;
+      }
+    }
+
+    i = j;
+  }
+
   return edits;
 }

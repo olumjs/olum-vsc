@@ -23,6 +23,9 @@ export interface Declaration {
   doc?: string;
   /** Module specifier for imports. */
   importSpec?: string;
+  /** Absolute offsets of the specifier string content (excluding quotes), for import declarations. */
+  specStart?: number;
+  specEnd?: number;
   /** Top-level members for object declarations (property name → declaration). */
   members?: Map<string, Declaration>;
   /** True for implicit symbols (e.g. `props`) that have no real declaration. */
