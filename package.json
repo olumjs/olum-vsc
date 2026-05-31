@@ -1,22 +1,23 @@
 {
 	"name": "olum",
 	"displayName": "olum",
-	"description": "Code snippets and syntax highlighter",
+	"description": "Syntax highlighting, IntelliSense, navigation and diagnostics for the Olum HTML framework",
 	"publisher": "eissapk",
 	"icon": "assets/logo.png",
 	"author": "Eissa Saber",
 	"version": "1.0.1",
 	"engines": {
-		"vscode": "^0.10.5"
+		"vscode": "^1.75.0"
 	},
 	"categories": [
+		"Programming Languages",
 		"Snippets",
 		"Other"
 	],
 	"activationEvents": [
-		"*"
+		"onLanguage:html"
 	],
-	"main": "bin/index.js",
+	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
@@ -64,19 +65,14 @@
 	},
 	"homepage": "https://github.com/olumjs/olum-vsc#readme",
 	"scripts": {
-		"postinstall": "node ./node_modules/vscode/bin/install",
-		"test": "node ./node_modules/vscode/bin/test"
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"typecheck": "tsc -p ./ --noEmit"
 	},
 	"devDependencies": {
-		"typescript": "^2.6.1",
-		"vscode": "^1.1.6",
-		"eslint": "^4.11.0",
-		"@types/node": "^7.0.43",
-		"@types/mocha": "^2.2.42"
-	},
-	"__metadata": {
-		"installedTimestamp": 1779869531202,
-		"targetPlatform": "undefined",
-		"size": 34304
+		"@types/node": "^18.19.0",
+		"@types/vscode": "^1.75.0",
+		"typescript": "^5.4.0"
 	}
 }

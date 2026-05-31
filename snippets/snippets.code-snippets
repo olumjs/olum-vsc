@@ -1,12 +1,12 @@
 {
   "If Statement (Olumjs)": {
     "prefix": ["if"],
-    "body": ["<if cond=\"${1:condition}\">$0</if>"],
+    "body": ["<if when={${1:condition}}>$0</if>"],
     "description": ["Olum Abbreviation", "\nIf statement"]
   },
   "Else If Statement (Olumjs)": {
     "prefix": ["elif", "elseif", "else-if"],
-    "body": ["<else-if cond=\"${1:condition}\">$0</else-if>"],
+    "body": ["<else-if when={${1:condition}}>$0</else-if>"],
     "description": ["Olum Abbreviation", "\nElse if statement"]
   },
   "Else Statement (Olumjs)": {
@@ -16,17 +16,17 @@
   },
   "For in Loop (Olumjs)": {
     "prefix": ["for", "forin"],
-    "body": ["<for cond=\"${2|key,(key\\, index),(key\\, index\\, value)|} in ${1:myObject}\">$0</for>"],
+    "body": ["<for each={${2|key,(key\\, index),(key\\, index\\, value)|} in ${1:myObject}}>$0</for>"],
     "description": ["Olum Abbreviation", "\nA for loop for objects"]
   },
   "For of Loop (Olumjs)": {
     "prefix": ["for", "forof"],
-    "body": ["<for cond=\"${2|item,(item\\, index),(item\\, index\\, array)|} of ${1:myArray}\">$0</for>"],
+    "body": ["<for each={${2|item,(item\\, index),(item\\, index\\, array)|} of ${1:myArray}}>$0</for>"],
     "description": ["Olum Abbreviation", "\nA for loop for arrays"]
   },
   "Show Statement (Olumjs)": {
     "prefix": ["show", "sho"],
-    "body": ["<show cond=\"${1:condition}\">$0</show>"],
+    "body": ["<show when={${1:condition}}>$0</show>"],
     "description": ["Olum Abbreviation", "\nA statement for showing","and hiding elements"]
   },
   "Self-closing tag":{

@@ -26,8 +26,10 @@ VS Code extension for the [olumjs](https://github.com/olumjs) framework. Provide
 - **Flow tags** (`<if>`, `<for>`, `<show>`, `<else-if>`, `<else>`) — keyword and `<`/`>` colored together
 - **Prop names** — `title` in `title="foo"` or `title={expr}`
 - **Prop values** — strings, numbers, booleans, null/undefined, variables, and braces each get their own color
-- **Expressions inside `cond={}`** — full expression highlighting inside flow tag conditions (e.g. `<if cond={name == 9 ? true : 'foo'}>`)
+- **Expressions inside flow attributes** — full expression highlighting inside `when={}` (on `<if>`, `<else-if>`, `<show>`) and `each={}` (on `<for>`), e.g. `<if when={name == 9 ? true : 'foo'}>` and `<for each={item of list}>`
+- **Text interpolations** — `{expr}` written in markup text content gets full expression highlighting too (e.g. `<span>{text}</span>`, `<p>count: {n + 1}</p>`)
 - **SCSS** — syntax highlighting injected inside `<style>` blocks
+- **`<script>` / `<style>` are ignored** — olum template highlighting (component/flow tags and `{expr}` interpolations) is skipped inside these blocks, so plain JS and CSS braces are left alone (SCSS is still highlighted by the injected grammar)
 
 ---
 
@@ -56,7 +58,23 @@ Hovering over a variable or property inside `{}` shows a VS Code-style type tool
 (method) onClick(): void
 ```
 
-Supported for plain variables, object properties (`r.input`), and shorthand props (`{title}`).
+Supported for plain variables, object properties (`r.input`), shorthand props (`{title}`), `<for>` locals, and components.
+
+---
+
+## References & Rename
+
+For any symbol used in a template expression — variables, object properties,
+`<for>` locals, and component tags:
+
+- **Find All References** (`Shift+F12`) lists every use across the template.
+- **Rename Symbol** (`F2`) updates every use plus the declaration (and, for
+  components, the import name). `<for>` locals are renamed only within their
+  loop body, and same-named outer variables are left untouched.
+- **Peek Definition** (`Alt+F12`) works wherever Go To Definition does.
+
+`<script>` and `<style>` blocks are excluded from all of the above — only the
+framework template is analysed.
 
 ---
 
