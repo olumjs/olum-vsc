@@ -17,6 +17,9 @@ import { tokenize, TokenKind } from "./exprTokens";
 interface OffsetRange { start: number; end: number; }
 type Buckets = Record<Bucket, OffsetRange[]>;
 
+/** Matches an arrow function (`=>`) or a `function` literal in a handler value. */
+const ANON_FUNCTION_RE = /=>|\bfunction\b/;
+
 const TOKEN_BUCKET: Record<TokenKind, Bucket> = {
   quote: "strQuote",
   string: "str",
@@ -33,10 +36,18 @@ const TOKEN_BUCKET: Record<TokenKind, Bucket> = {
 export function highlight(editor: vscode.TextEditor, model: ParsedDocument, dec: DecorationSet): void {
   const b = emptyBuckets();
 
+  // `{…}` interpolation spans (sorted), so string-attr values can be coloured on
+  // their literal parts only — never overlapping the JS tokens drawn inside the
+  // braces, whose color must win.
+  const interpolations = model.expressions
+    .filter((e) => e.braceStart !== -1)
+    .map((e) => ({ start: e.braceStart, end: e.braceEnd === -1 ? model.text.length : e.braceEnd + 1 }))
+    .sort((x, y) => x.start - y.start);
+
   // ── component tags ─────────────────────────────────────────────────────────
   for (const tag of model.components) {
     b.comp.push({ start: tag.nameStart, end: tag.nameEnd });
-    if (!tag.isClosing) highlightAttrs(tag.attrs, b);
+    if (!tag.isClosing) highlightAttrs(tag.attrs, b, interpolations);
   }
 
   // ── flow tags ──────────────────────────────────────────────────────────────
@@ -44,13 +55,22 @@ export function highlight(editor: vscode.TextEditor, model: ParsedDocument, dec:
     b.flow.push({ start: flow.ltOffset, end: flow.ltOffset + 1 }); // <
     b.flow.push({ start: flow.keywordStart, end: flow.keywordEnd }); // keyword
     if (flow.gtOffset !== -1) b.flow.push({ start: flow.gtOffset, end: flow.gtOffset + 1 }); // >
-    if (!flow.isClosing) highlightAttrs(flow.attrs, b);
+    if (!flow.isClosing) highlightAttrs(flow.attrs, b, interpolations);
   }
 
-  // ── all {expression} occurrences (attr values, text, for-each) ─────────────
+  // ── all expression occurrences (expr attrs, text/string interpolation, for-each) ─
   for (const expr of model.expressions) {
-    b.brace.push({ start: expr.braceStart, end: expr.braceStart + 1 });
-    if (expr.braceEnd !== -1) b.brace.push({ start: expr.braceEnd, end: expr.braceEnd + 1 });
+    // `on*` handlers are highlighted as JavaScript by the editor's built-in HTML
+    // grammar already, so defer to it for plain handlers; only take over when the
+    // value is an anonymous function (arrow `=>` or a `function` literal).
+    if (expr.isEventHandler && !ANON_FUNCTION_RE.test(expr.text)) continue;
+
+    // Quote-delimited expression attributes have no braces (braceStart === -1);
+    // their surrounding quotes are drawn by `highlightAttrs` instead.
+    if (expr.braceStart !== -1) {
+      b.brace.push({ start: expr.braceStart, end: expr.braceStart + 1 });
+      if (expr.braceEnd !== -1) b.brace.push({ start: expr.braceEnd, end: expr.braceEnd + 1 });
+    }
     for (const tok of tokenize(expr.text, expr.innerStart)) {
       if (tok.kind === "ident") {
         const name = model.text.slice(tok.start, tok.end);
@@ -70,21 +90,35 @@ export function highlight(editor: vscode.TextEditor, model: ParsedDocument, dec:
   applyBuckets(editor, dec, b);
 }
 
-function highlightAttrs(attrs: Attr[], b: Buckets): void {
+function highlightAttrs(attrs: Attr[], b: Buckets, interpolations: OffsetRange[]): void {
   for (const attr of attrs) {
-    if (attr.kind !== "shorthand") {
-      b.propName.push({ start: attr.nameStart, end: attr.nameEnd });
-    }
+    b.propName.push({ start: attr.nameStart, end: attr.nameEnd });
     if (attr.eqOffset !== undefined) b.propEq.push({ start: attr.eqOffset, end: attr.eqOffset + 1 });
-    if (attr.kind === "string") {
-      if (attr.quoteOpen !== undefined) b.strQuote.push({ start: attr.quoteOpen, end: attr.quoteOpen + 1 });
-      if (attr.strStart !== undefined && attr.strEnd !== undefined && attr.strEnd > attr.strStart) {
-        b.str.push({ start: attr.strStart, end: attr.strEnd });
-      }
-      if (attr.quoteClose !== undefined) b.strQuote.push({ start: attr.quoteClose, end: attr.quoteClose + 1 });
+
+    // Both string and expression attrs carry quotes; draw them as string quotes.
+    if (attr.quoteOpen !== undefined) b.strQuote.push({ start: attr.quoteOpen, end: attr.quoteOpen + 1 });
+    if (attr.quoteClose !== undefined) b.strQuote.push({ start: attr.quoteClose, end: attr.quoteClose + 1 });
+
+    if (attr.kind === "string" && attr.strStart !== undefined && attr.strEnd !== undefined && attr.strEnd > attr.strStart) {
+      // Colour only the literal parts of the value as a string, skipping any
+      // embedded `{…}` interpolation spans so the JS tokens drawn inside the
+      // braces are never overlapped (and therefore never lost to the string colour).
+      pushLiteralStringSegments(b, attr.strStart, attr.strEnd, interpolations);
     }
-    // expr / shorthand brace + content handled by the expressions loop.
+    // expr-attr interior + string interpolations are handled by the expressions loop.
   }
+}
+
+/** Push `str` ranges for `[from, to)` minus any interpolation spans inside it. */
+function pushLiteralStringSegments(b: Buckets, from: number, to: number, interpolations: OffsetRange[]): void {
+  let cursor = from;
+  for (const it of interpolations) {
+    if (it.end <= from) continue; // before this value
+    if (it.start >= to) break; // past this value (interpolations are sorted)
+    if (it.start > cursor) b.str.push({ start: cursor, end: it.start });
+    cursor = Math.max(cursor, it.end);
+  }
+  if (cursor < to) b.str.push({ start: cursor, end: to });
 }
 
 function emptyBuckets(): Buckets {

@@ -32,6 +32,15 @@ const isIdentStart = (c: string): boolean =>
   (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_" || c === "$";
 const isIdentPart = (c: string): boolean => isIdentStart(c) || (c >= "0" && c <= "9");
 
+/**
+ * Operator / accessor characters. Coloring these matters because the editor's
+ * built-in HTML grammar paints attribute values as strings; without a token of
+ * our own here, operators inside an expression (`===`, `+`, `.`, `=>` …) keep
+ * that string color instead of standing out. Runs of these are emitted as a
+ * single `punct` token (so `===`, `<=`, `&&`, `?.` colour as one unit).
+ */
+const isOperatorChar = (c: string): boolean => ".+-*/%=!<>&|^~;".includes(c);
+
 export function tokenize(text: string, base: number): Token[] {
   const tokens: Token[] = [];
   const n = text.length;
@@ -92,6 +101,16 @@ export function tokenize(text: string, base: number): Token[] {
       else if (KW_FLOW.has(word)) kind = "keywordFlow";
       else if (KW_DECL.has(word)) kind = "keywordDecl";
       tokens.push({ kind, start: base + i, end: base + j });
+      i = j;
+      continue;
+    }
+
+    // Operators / member accessors (`===`, `+`, `.`, `&&`, `?.` …). Greedily
+    // consume a run so multi-char operators colour as a single token.
+    if (isOperatorChar(c)) {
+      let j = i + 1;
+      while (j < n && isOperatorChar(text[j])) j++;
+      tokens.push({ kind: "punct", start: base + i, end: base + j });
       i = j;
       continue;
     }

@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 	<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 		<Metadata>
-			<Identity Language="en-US" Id="olum" Version="1.0.1" Publisher="eissapk" />
+			<Identity Language="en-US" Id="olum" Version="1.5.0" Publisher="eissapk" />
 			<DisplayName>olum</DisplayName>
-			<Description xml:space="preserve">Code snippets and syntax highlighter</Description>
+			<Description xml:space="preserve">Syntax highlighting, IntelliSense, navigation and diagnostics for the Olum HTML framework</Description>
 			<Tags>snippet,html</Tags>
-			<Categories>Snippets,Other</Categories>
+			<Categories>Programming Languages,Snippets,Other</Categories>
 			<GalleryFlags>Public</GalleryFlags>
 			
 			<Properties>
-				<Property Id="Microsoft.VisualStudio.Code.Engine" Value="^0.10.5" />
+				<Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.75.0" />
 				<Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="" />
 				<Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value="" />
 				<Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace" />

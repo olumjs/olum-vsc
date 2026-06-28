@@ -148,5 +148,10 @@
 	},
 	"dependencies": {
 		"js-beautify": "^1.15.4"
+	},
+	"__metadata": {
+		"installedTimestamp": 1782661680962,
+		"targetPlatform": "undefined",
+		"size": 5478994
 	}
 }

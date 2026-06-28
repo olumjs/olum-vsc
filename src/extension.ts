@@ -14,7 +14,7 @@
  */
 
 import * as vscode from "vscode";
-import { caseFixEdits, propQuoteFix, shorthandFix } from "./commands/fixes";
+import { caseFixEdits } from "./commands/fixes";
 import { updateDiagnostics } from "./diagnostics/diagnostics";
 import { createDecorations, DecorationSet, disposeDecorations } from "./highlighting/decorations";
 import { highlight } from "./highlighting/highlighter";
@@ -132,7 +132,7 @@ function scheduleAutoFix(
   debouncer.schedule(doc.uri.toString(), () => {
     const editor = vscode.window.visibleTextEditors.find((e) => e.document === doc);
     if (!editor) return;
-    const edits = [...caseFixEdits(doc), ...propQuoteFix(doc), ...shorthandFix(doc)];
+    const edits = [...caseFixEdits(doc)];
     if (edits.length) editor.edit((eb) => edits.forEach((e) => eb.replace(e.range, e.newText)));
   });
 }

@@ -22,16 +22,26 @@ export interface Region {
 
 /** Where an expression was found, which changes how it is treated. */
 export type ExpressionContext =
-  | "attr" // a `prop={expr}` or `{shorthand}` attribute value
+  | "attr" // an expression-attr value (`when="…"`) or a `{…}` interpolation in a string attr
   | "text" // a `{expr}` interpolation in element text content
-  | "for-each"; // the `each={x of y}` binding of a <for> tag (handled specially)
+  | "for-each"; // the `each="x of y"` binding of a <for> tag (handled specially)
 
-/** A `{ ... }` expression occurrence in the template, with parsed identifiers. */
+/**
+ * A JavaScript expression occurrence in the template, with parsed identifiers.
+ *
+ * Expressions come in two flavours:
+ *   - **brace-delimited** `{ … }` — text interpolations and `{…}` interpolations
+ *     embedded inside a normal string attribute value; `braceStart`/`braceEnd`
+ *     point at the braces.
+ *   - **quote-delimited** — the whole value of an expression attribute
+ *     (`when`/`each`/`key`/`html`/`on*`); there are no braces, so `braceStart`
+ *     and `braceEnd` are both `-1` and the surrounding quotes belong to the `Attr`.
+ */
 export interface Expression {
   context: ExpressionContext;
-  /** Offset of the opening `{`. */
+  /** Offset of the opening `{`, or -1 for a quote-delimited expression attribute. */
   braceStart: number;
-  /** Offset of the closing `}`, or -1 when the expression is not terminated. */
+  /** Offset of the closing `}`, or -1 when unterminated / quote-delimited. */
   braceEnd: number;
   /** Inner content range (between the braces). */
   innerStart: number;
@@ -40,6 +50,13 @@ export interface Expression {
   text: string;
   /** Identifier references extracted from the expression. */
   identifiers: ExprIdentifier[];
+  /**
+   * True when this expression is the value of an `on*` event handler. The
+   * editor's built-in HTML grammar already highlights `on*` values as
+   * JavaScript, so the highlighter defers to it for plain handlers and only
+   * applies olum coloring when the value is an anonymous function.
+   */
+  isEventHandler?: boolean;
 }
 
 /** Role of an identifier segment within an expression. */
@@ -59,23 +76,32 @@ export interface ExprIdentifier {
   objectName?: string;
 }
 
-/** A parsed attribute on a tag. */
+/**
+ * A parsed attribute on a tag.
+ *
+ *   - `string`  — a normal attribute whose value is a literal string. It may
+ *     still contain embedded `{…}` interpolations, recorded separately as
+ *     brace-delimited `Expression`s.
+ *   - `expr`    — an expression attribute (`when`/`each`/`key`/`html`/`on*`)
+ *     whose entire quoted value is a JavaScript expression. The quotes are kept
+ *     in `quoteOpen`/`quoteClose`; the interior is `exprStart`/`exprEnd`.
+ *   - `boolean` — a valueless attribute (`disabled`).
+ */
 export interface Attr {
-  kind: "string" | "expr" | "shorthand" | "boolean";
-  /** Prop name (for `shorthand` this equals the identifier name). */
+  kind: "string" | "expr" | "boolean";
+  /** Prop name. */
   name: string;
   nameStart: number;
   nameEnd: number;
   /** `=` sign offset (for string/expr attrs). */
   eqOffset?: number;
-  /** String value: quote offsets and content range. */
+  /** Quote offsets — set for both `string` and `expr` (quote-delimited) attrs. */
   quoteOpen?: number;
   quoteClose?: number;
+  /** Literal string content range (for `string` attrs). */
   strStart?: number;
   strEnd?: number;
-  /** Expression value: brace offsets and inner content range. */
-  braceStart?: number;
-  braceEnd?: number;
+  /** Expression interior range (for `expr` attrs). */
   exprStart?: number;
   exprEnd?: number;
 }

@@ -50,7 +50,7 @@ src/
 ├─ parser/                  Pure, offset-based, no vscode import
 │   ├─ types.ts             Shared data shapes (ParsedDocument, etc.)
 │   ├─ expression.ts        JS-like expression → identifier references
-│   ├─ scanner.ts           Structural HTML walk (tags, attrs, {expr}, raw blocks)
+│   ├─ scanner.ts           Structural HTML walk (tags, expr attrs, {…} interpolations, raw blocks)
 │   └─ documentModel.ts     Orchestration + per-version cache + scope resolution
 ├─ scanner/                 <script> symbol table
 │   ├─ symbols.ts           Declaration model, type inference, hover labels
@@ -106,14 +106,11 @@ converted to `vscode.Position`/`Range` only at the edges (`utils/ranges.ts`).
 ## Formatting
 
 The extension registers a `DocumentFormattingEditProvider` (`language/formatting/formattingProvider.ts`)
-that uses **js-beautify** to format HTML files. This is necessary because
-Prettier — the most common HTML formatter — misparses olum-specific attribute
-syntax like `each={todo of list}` (unquoted value with spaces) and produces
-completely broken output.
-
-js-beautify leaves all `{...}` attribute forms intact and only adjusts
-indentation and whitespace. The formatter reads VS Code's `html.format.*`
-settings so user preferences are respected.
+that uses **js-beautify** to format HTML files, reading VS Code's `html.format.*`
+settings so user preferences are respected. Because every olum value now lives
+inside quotes (`each="todo of list"`, `when="a == 'b' || c"`), generic HTML
+formatters no longer split it into broken attributes — but js-beautify is still
+used for consistent, olum-aware formatting.
 
 `package.json` sets `configurationDefaults` so the Olum formatter is the
 default for HTML files when the extension is active — no manual configuration
@@ -123,16 +120,19 @@ needed by users.
 
 Even with the custom formatter, a user might run Prettier or another generic
 formatter manually. The extension listens to `onDidChangeTextDocument` and runs
-three repair passes (debounced 300 ms) after every change:
+a repair pass (debounced 300 ms) after every change:
 
 | Function | What it fixes |
 |---|---|
-| `propQuoteFix` | `attr="{expr}"` → `attr={expr}` (quotes wrapped around `{}` by formatter) |
-| `shorthandFix` | `{todo}=""` → `{todo}` (empty value added to shorthand prop) |
 | `caseFixEdits` | `<header>` → `<Header>` (component tag lowercased by formatter) |
 
-All three skip `<script>`/`<style>` regions and return `[]` when there is
-nothing to fix, so the edit loop terminates after one pass.
+It skips `<script>`/`<style>` regions and returns `[]` when there is nothing to
+fix, so the edit loop terminates after one pass.
+
+> The earlier `propQuoteFix` / `shorthandFix` repairs were removed with the
+> move to quote-delimited syntax: there are no longer any `attr={expr}` or
+> `{shorthand}` forms to restore, and unwrapping `attr="{expr}"` would now
+> corrupt a legitimate string interpolation.
 
 ---
 
@@ -167,9 +167,11 @@ result. Everything else inside `<script>` is ignored.
 
 ## Why decorations (not a TextMate grammar)
 
-The same reasons as before: brace-depth tracking for `={nested:{objects}}` and
-multi-line tags cannot be expressed in a stateless TextMate grammar. SCSS inside
-`<style>` is still handled by the injected grammar in `syntax/scss.injection.json`.
+The same reasons as before: brace- and string-aware tracking for nested
+interpolations like `class="a {f({k: v})}"`, whole-expression attribute values,
+and multi-line tags cannot be expressed in a stateless TextMate grammar. SCSS
+inside `<style>` is still handled by the injected grammar in
+`syntax/scss.injection.json`.
 
 ---
 
@@ -180,6 +182,6 @@ import `vscode`, so they can be exercised directly against the compiled output:
 
 ```js
 const { parse } = require("./out/parser/documentModel");
-const model = parse("<for each={x of list}><span>{x}</span></for>");
+const model = parse('<for each="x of list"><span>{x}</span></for>');
 console.log(model.forScopes, model.expressions);
 ```

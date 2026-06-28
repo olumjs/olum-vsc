@@ -32,6 +32,16 @@ const isTagNameChar = (c: string): boolean => !!c && !/[\s>/]/.test(c);
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\r" || c === "\n";
 const isAttrNameChar = (c: string): boolean => /[A-Za-z0-9_$:.-]/.test(c);
 
+/**
+ * Attribute names whose entire quoted value is a JavaScript expression, per the
+ * olum rule "everything lives inside `""`": the flow/binding attributes plus
+ * every `on*` event handler. Every other attribute is a literal string that may
+ * contain `{…}` interpolations.
+ */
+const EXPRESSION_ATTRS = new Set(["when", "each", "key", "html"]);
+const isExpressionAttr = (name: string): boolean =>
+  EXPRESSION_ATTRS.has(name) || /^on[A-Za-z]/.test(name);
+
 export function scan(text: string): ScanResult {
   const components: ComponentTag[] = [];
   const flows: FlowTag[] = [];
@@ -231,9 +241,11 @@ function matchBrace(text: string, i: number): number {
 }
 
 /**
- * Scan an attribute region `[from, to)` and return parsed attributes. Any
- * `={expr}` / `{shorthand}` values are also appended to `expressions` so the
- * model can extract identifiers from them later.
+ * Scan an attribute region `[from, to)` and return parsed attributes. Two kinds
+ * of JavaScript are also appended to `expressions` for later identifier
+ * extraction: the whole quoted value of an expression attribute
+ * (`when`/`each`/`key`/`html`/`on*`), and every `{…}` interpolation embedded in
+ * an ordinary string attribute's value.
  */
 function scanAttributes(
   text: string,
@@ -247,36 +259,6 @@ function scanAttributes(
   while (i < to) {
     const c = text[i];
     if (isSpace(c)) { i++; continue; }
-
-    // Shorthand `{name}` (an attribute that is a bare expression).
-    if (c === "{") {
-      const close = matchBraceBounded(text, i, to);
-      const innerStart = i + 1;
-      const innerEnd = close === -1 ? to : close;
-      const inner = text.slice(innerStart, innerEnd);
-      const trimmed = inner.trim();
-      const expr: Expression = {
-        context: "attr",
-        braceStart: i,
-        braceEnd: close,
-        innerStart,
-        innerEnd,
-        text: inner,
-        identifiers: [],
-      };
-      expressions.push(expr);
-      // Treat a single bare identifier as a shorthand prop.
-      if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(trimmed)) {
-        const nameStart = innerStart + inner.indexOf(trimmed);
-        attrs.push({
-          kind: "shorthand", name: trimmed,
-          nameStart, nameEnd: nameStart + trimmed.length,
-          braceStart: i, braceEnd: close, exprStart: innerStart, exprEnd: innerEnd,
-        });
-      }
-      i = close === -1 ? to : close + 1;
-      continue;
-    }
 
     // Attribute name.
     if (isAttrNameChar(c)) {
@@ -300,28 +282,28 @@ function scanAttributes(
         const quoteOpen = v;
         let q = v + 1;
         while (q < to && text[q] !== vc) { if (text[q] === "\\") q++; q++; }
-        attrs.push({
-          kind: "string", name, nameStart, nameEnd: nameStart + name.length,
-          eqOffset, quoteOpen, quoteClose: q < to ? q : undefined,
-          strStart: v + 1, strEnd: q < to ? q : to,
-        });
-        i = q < to ? q + 1 : to;
-        continue;
-      }
-
-      if (vc === "{") {
-        const close = matchBraceBounded(text, v, to);
+        const closed = q < to;
         const innerStart = v + 1;
-        const innerEnd = close === -1 ? to : close;
-        expressions.push({
-          context: "attr", braceStart: v, braceEnd: close,
-          innerStart, innerEnd, text: text.slice(innerStart, innerEnd), identifiers: [],
-        });
-        attrs.push({
-          kind: "expr", name, nameStart, nameEnd: nameStart + name.length,
-          eqOffset, braceStart: v, braceEnd: close, exprStart: innerStart, exprEnd: innerEnd,
-        });
-        i = close === -1 ? to : close + 1;
+        const innerEnd = closed ? q : to;
+        const common = {
+          name, nameStart, nameEnd: nameStart + name.length,
+          eqOffset, quoteOpen, quoteClose: closed ? q : undefined,
+        };
+
+        if (isExpressionAttr(name)) {
+          // Whole quoted value is a JavaScript expression (no braces).
+          expressions.push({
+            context: "attr", braceStart: -1, braceEnd: -1,
+            innerStart, innerEnd, text: text.slice(innerStart, innerEnd), identifiers: [],
+            isEventHandler: /^on[A-Za-z]/.test(name),
+          });
+          attrs.push({ kind: "expr", ...common, exprStart: innerStart, exprEnd: innerEnd });
+        } else {
+          // Literal string with embedded `{…}` interpolations.
+          scanInterpolations(text, innerStart, innerEnd, expressions);
+          attrs.push({ kind: "string", ...common, strStart: innerStart, strEnd: innerEnd });
+        }
+        i = closed ? q + 1 : to;
         continue;
       }
 
@@ -340,6 +322,35 @@ function scanAttributes(
   }
 
   return attrs;
+}
+
+/**
+ * Scan a literal string value `[from, to)` for embedded `{ … }` interpolations,
+ * appending one brace-delimited `Expression` per interpolation. Brace matching
+ * is string-aware, so an apostrophe or quoted literal inside the expression
+ * (e.g. `{state.tab === 'a' ? 'x' : 'y'}`) does not confuse it.
+ */
+function scanInterpolations(
+  text: string,
+  from: number,
+  to: number,
+  expressions: Expression[],
+): void {
+  let i = from;
+  while (i < to) {
+    if (text[i] === "{") {
+      const close = matchBraceBounded(text, i, to);
+      const innerStart = i + 1;
+      const innerEnd = close === -1 ? to : close;
+      expressions.push({
+        context: "attr", braceStart: i, braceEnd: close,
+        innerStart, innerEnd, text: text.slice(innerStart, innerEnd), identifiers: [],
+      });
+      i = close === -1 ? to : close + 1;
+      continue;
+    }
+    i++;
+  }
 }
 
 /** Like `matchBrace` but never scans past `to`. */

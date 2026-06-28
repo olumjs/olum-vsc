@@ -46,9 +46,11 @@ export function parse(text: string, version = 0): ParsedDocument {
   const result = scan(text);
   const forScopes: ForScope[] = [];
 
-  // Index expressions by their opening-brace offset for quick lookup.
-  const exprByBrace = new Map<number, Expression>();
-  for (const e of result.expressions) exprByBrace.set(e.braceStart, e);
+  // Index expressions by their inner-content start offset for quick lookup.
+  // (Brace offsets are unsuitable now that expression attributes are
+  // quote-delimited and share a sentinel `braceStart` of -1.)
+  const exprByInner = new Map<number, Expression>();
+  for (const e of result.expressions) exprByInner.set(e.innerStart, e);
 
   // ── resolve <for> scopes and their each-bindings ──────────────────────────
   const stack: ForScope[] = [];
@@ -65,7 +67,7 @@ export function parse(text: string, version = 0): ParsedDocument {
       const inner = text.slice(eachAttr.exprStart, eachAttr.exprEnd);
       const binding = parseForEach(inner, eachAttr.exprStart);
       locals = binding.locals;
-      const expr = eachAttr.braceStart !== undefined ? exprByBrace.get(eachAttr.braceStart) : undefined;
+      const expr = exprByInner.get(eachAttr.exprStart);
       if (expr) {
         expr.context = "for-each";
         expr.identifiers = binding.iterable; // only the iterable side are references
@@ -73,7 +75,9 @@ export function parse(text: string, version = 0): ParsedDocument {
     }
     const scope: ForScope = {
       locals,
-      bodyStart: flow.gtOffset === -1 ? flow.tagEnd : flow.gtOffset + 1,
+      // Scope starts at the `<` so the opening tag's own bindings (`each`'s
+      // locals, `key="item.id"`, …) resolve against the loop locals too.
+      bodyStart: flow.tagStart,
       bodyEnd: text.length,
     };
     if (!flow.selfClosing) stack.push(scope);
