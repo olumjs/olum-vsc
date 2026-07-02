@@ -138,7 +138,11 @@ interface ImportInsert {
   suffix: string;
 }
 
-/** Where to insert an auto-import inside the <script> block. */
+/**
+ * Where to insert an auto-import. Prefers appending after the last existing
+ * import, otherwise the top of the <script> block; if the document has no
+ * <script> block at all, one is created at the top of the document.
+ */
 function computeImportInsert(
   document: vscode.TextDocument,
   model: ParsedDocument,
@@ -152,7 +156,10 @@ function computeImportInsert(
     return { position: lineEnd, prefix: "\n", suffix: "" };
   }
   const script = model.scriptRegions[0];
-  if (!script) return null; // no <script> to import into
+  if (!script) {
+    // No <script> block yet — create one at the top of the document.
+    return { position: document.positionAt(0), prefix: "<script>\n  ", suffix: "\n</script>\n\n" };
+  }
   const pos = document.positionAt(script.start);
   return { position: pos, prefix: "\n  ", suffix: "" };
 }
