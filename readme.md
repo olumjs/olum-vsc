@@ -140,6 +140,14 @@ framework template is analysed.
 
 **Variables in expressions** — type `{` inside a string attribute or text to open an interpolation and get a dropdown of all `const`/`let`/`var`, `function`, and `this.*` identifiers declared in the current file (the same identifiers are available inside expression-attribute values like `onclick="…"`)
 
+**Olum runtime helpers** — inside a `<script>` block, typing one of the runtime exports suggests a completion that auto-imports it from `"olum"`. Selecting one inserts a ready-to-fill snippet (cursor at `⟨…⟩`) and adds the import — merging into an existing `import { … } from "olum"` line when there is one:
+
+| Type | Inserts | Auto-import |
+|------|---------|-------------|
+| `onMount` | `onMount(() => { ⟨…⟩ })` | `import { onMount } from "olum";` |
+| `props`   | `const {⟨…⟩} = props()`   | `import { props } from "olum";`   |
+| `params`  | `const {⟨…⟩} = params()`  | `import { params } from "olum";`  |
+
 ---
 
 ## Language Configuration

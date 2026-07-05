@@ -29,9 +29,15 @@ An olum component file is treated like a React `.jsx` file:
   `props` and any `<for>` locals in scope.
 
 `<script>` and `<style>` bodies are **never** treated as template: no
-highlighting, hover, references, rename or completion fire there. The one
-exception is **go-to-definition on import path strings** — Ctrl+Click on
-`"./Header"` inside a `<script>` block navigates to the component file.
+highlighting, hover, references or rename fire there. Two exceptions inside
+`<script>`:
+
+- **Go-to-definition on import path strings** — Ctrl+Click on `"./Header"`
+  navigates to the component file.
+- **Runtime-helper completion** — typing an olum runtime export (`onMount`,
+  `props`, `params`) offers an auto-importing snippet completion (see
+  `OLUM_RUNTIME` in `language/completion/completionProvider.ts`). `<style>`
+  bodies still get nothing.
 
 The `<script>` block **is** the symbol source that powers navigation *from*
 the template.
@@ -65,7 +71,7 @@ src/
 │   ├─ definitions/         Go-to-definition provider (template + import paths)
 │   ├─ references/          Find-references provider
 │   ├─ rename/              Rename provider
-│   ├─ completion/          Completion provider (identifiers + components)
+│   ├─ completion/          Completion provider (identifiers + components + olum runtime helpers)
 │   └─ formatting/          Document formatting provider (js-beautify based)
 ├─ highlighting/
 │   ├─ decorations.ts       TextEditorDecorationType per color bucket
@@ -155,6 +161,7 @@ result. Everything else inside `<script>` is ignored.
 |---|---|
 | **Change a color** | Edit `olum.colors.*` in VS Code settings (changes apply immediately, no recompile). To change defaults, edit `DEFAULTS` in `utils/colors.ts`. |
 | **Add a new flow tag** (e.g. `<while>`) | Add the name to `FLOW_TAG_NAMES` in `parser/types.ts`. The parser, highlighter, formatter auto-repair, and auto-close guard all update automatically. Add a snippet too if desired. |
+| **Add an auto-importable olum runtime helper** (e.g. `onUnmount`) | Append an entry to `OLUM_RUNTIME` in `language/completion/completionProvider.ts`. Set `snippet` for an expansion (with `$0` as the final cursor), and `importName` when the trigger word differs from the exported name. |
 | Recognise a new declaration form for hover/def | `scanner/scriptScope.ts` |
 | Adjust how identifiers are extracted from expressions | `parser/expression.ts` |
 | Change component file resolution | `components/resolver.ts` — all resolved paths are validated against `vscode.workspace.workspaceFolders` to prevent path-traversal via crafted import specs |
