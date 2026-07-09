@@ -83,14 +83,18 @@ class OlumCompletionProvider implements vscode.CompletionItemProvider {
   ): Promise<vscode.CompletionItem[] | null> {
     const offset = document.offsetAt(position);
     const { model, symbols } = analyze(document);
-    if (isInRawRegion(model, offset)) {
-      // Inside <script> we offer olum runtime helpers; inside <style> nothing.
-      return isInScriptRegion(model, offset) ? runtimeCompletions(document, model, symbols) : null;
-    }
-
     const line = document.lineAt(position.line).text;
     const before = line.slice(0, position.character);
     const after = line.slice(position.character);
+
+    if (isInRawRegion(model, offset)) {
+      if (!isInScriptRegion(model, offset)) return null; // inside <style> → nothing
+      // `{` is a trigger char for markup template expressions; inside <script>
+      // it starts an object literal/block, so don't surface runtime helpers
+      // (avoids `const state = {onMount}`).
+      if (before.trimEnd().endsWith("{")) return null;
+      return runtimeCompletions(document, model, symbols);
+    }
 
     // ── inside a {expression} ────────────────────────────────────────────────
     if (before.lastIndexOf("{") > before.lastIndexOf("}") && after.includes("}")) {
@@ -173,6 +177,9 @@ function identifierCompletions(
 
   for (const decl of symbols.byName.values()) {
     if (decl.kind === "import" && !isPascalCase(decl.name)) {
+      // olum runtime helpers (onMount, props, params) are script-only; they are
+      // not meaningful values inside a template `{expression}`.
+      if (decl.importSpec === OLUM_MODULE) continue;
       add(decl.name, vscode.CompletionItemKind.Module);
       continue;
     }
