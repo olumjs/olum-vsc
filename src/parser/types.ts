@@ -11,7 +11,7 @@
  * Add new flow tag names here — the parser, highlighter, formatter auto-repair,
  * and auto-close guard all derive from this array automatically.
  */
-export const FLOW_TAG_NAMES = ["if", "else-if", "else", "show", "for"] as const;
+export const FLOW_TAG_NAMES = ["if", "else-if", "else", "show", "for", "log", "transition"] as const;
 export type FlowKind = (typeof FLOW_TAG_NAMES)[number];
 
 /** A half-open `[start, end)` offset range into the document text. */

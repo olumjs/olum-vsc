@@ -1,4 +1,14 @@
 {
+  "Log tag (Olumjs)": {
+    "prefix": ["log"],
+    "body": ["<log>$0</log>"],
+    "description": ["Olum Abbreviation", "\nLog Tag"]
+  },
+  "Transition tag (Olumjs)": {
+    "prefix": ["trans", "transition"],
+    "body": ["<transition>$0</transition>"],
+    "description": ["Olum Abbreviation", "\nTransition Tag"]
+  },
   "If Statement (Olumjs)": {
     "prefix": ["if"],
     "body": ["<if when=\"${1:condition}\">$0</if>"],
