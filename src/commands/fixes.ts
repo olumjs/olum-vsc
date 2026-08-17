@@ -17,7 +17,7 @@ import * as vscode from "vscode";
 import { componentImports } from "../components/imports";
 import { isInRawRegion } from "../parser/documentModel";
 import { analyze } from "../language/services";
-import { escapeRegExp } from "../utils/helpers";
+import { escapeRegExp, isHtmlTagName } from "../utils/helpers";
 import { rangeFromOffsets } from "../utils/ranges";
 
 export function caseFixEdits(document: vscode.TextDocument): vscode.TextEdit[] {
@@ -28,6 +28,10 @@ export function caseFixEdits(document: vscode.TextDocument): vscode.TextEdit[] {
   for (const imp of componentImports(symbols)) {
     const lower = imp.name.toLowerCase();
     if (lower === imp.name) continue;
+    // `<Button/>` and `<button>` are different tags: the lowercase spelling is a
+    // real HTML element the author meant to write, not formatter damage. Fixing
+    // it would rewrite every native `<button>` in a file that imports `Button`.
+    if (isHtmlTagName(lower)) continue;
     const re = new RegExp(`<(/?)${escapeRegExp(lower)}(?=[\\s>/])`, "g");
     let m: RegExpExecArray | null;
     while ((m = re.exec(text))) {

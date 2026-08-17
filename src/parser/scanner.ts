@@ -39,8 +39,20 @@ const isAttrNameChar = (c: string): boolean => /[A-Za-z0-9_$:.-]/.test(c);
  * contain `{…}` interpolations.
  */
 const EXPRESSION_ATTRS = new Set(["when", "each", "key", "html"]);
-const isExpressionAttr = (name: string): boolean =>
-  EXPRESSION_ATTRS.has(name) || /^on[A-Za-z]/.test(name);
+
+/**
+ * `<transition>`-only expression attributes. Their values are transition
+ * definitions (`fade`, `fly({ y: 200 })`, `{ duration: 300 }`) — JavaScript, not
+ * literal text — so they are highlighted and parsed like any other expression
+ * attr. They are scoped to the tag because `in`/`out`/`transition` are perfectly
+ * ordinary string attributes on any other element.
+ */
+const TRANSITION_ATTRS = new Set(["in", "out", "transition", "flip"]);
+
+const isExpressionAttr = (name: string, tagName: string): boolean =>
+  EXPRESSION_ATTRS.has(name) ||
+  (tagName === "transition" && TRANSITION_ATTRS.has(name)) ||
+  /^on[A-Za-z]/.test(name);
 
 export function scan(text: string): ScanResult {
   const components: ComponentTag[] = [];
@@ -127,7 +139,7 @@ export function scan(text: string): ScanResult {
       const realEnd = tagEnd === -1 ? n : tagEnd; // offset of '>' or n
       const selfClosing = tagEnd !== -1 && text[tagEnd - 1] === "/";
       const attrsEnd = selfClosing ? tagEnd - 1 : realEnd;
-      const attrs = scanAttributes(text, j, attrsEnd, expressions);
+      const attrs = scanAttributes(text, j, attrsEnd, expressions, name);
 
       const flow = asFlowKind(name);
       if (flow) {
@@ -244,14 +256,18 @@ function matchBrace(text: string, i: number): number {
  * Scan an attribute region `[from, to)` and return parsed attributes. Two kinds
  * of JavaScript are also appended to `expressions` for later identifier
  * extraction: the whole quoted value of an expression attribute
- * (`when`/`each`/`key`/`html`/`on*`), and every `{…}` interpolation embedded in
- * an ordinary string attribute's value.
+ * (`when`/`each`/`key`/`html`/`on*`, plus `in`/`out`/`transition`/`flip` on a
+ * `<transition>` tag), and every `{…}` interpolation embedded in an ordinary
+ * string attribute's value.
+ *
+ * `tagName` is the owning tag's name, needed for the tag-scoped attributes.
  */
 function scanAttributes(
   text: string,
   from: number,
   to: number,
   expressions: Expression[],
+  tagName: string,
 ): Attr[] {
   const attrs: Attr[] = [];
   let i = from;
@@ -290,7 +306,7 @@ function scanAttributes(
           eqOffset, quoteOpen, quoteClose: closed ? q : undefined,
         };
 
-        if (isExpressionAttr(name)) {
+        if (isExpressionAttr(name, tagName)) {
           // Whole quoted value is a JavaScript expression (no braces).
           expressions.push({
             context: "attr", braceStart: -1, braceEnd: -1,
