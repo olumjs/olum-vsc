@@ -34,10 +34,11 @@ highlighting, hover, references or rename fire there. Two exceptions inside
 
 - **Go-to-definition on import path strings** — Ctrl+Click on `"./Header"`
   navigates to the component file.
-- **Runtime-helper completion** — typing an olum runtime export (`onMount`,
-  `props`, `params`) offers an auto-importing snippet completion (see
-  `OLUM_RUNTIME` in `language/completion/completionProvider.ts`). `<style>`
-  bodies still get nothing.
+- **Auto-import completion** — typing a name offers every symbol the workspace
+  exports, with an import edit (see `autoImportCompletions` in
+  `language/completion/completionProvider.ts`, backed by `modules/exports.ts`).
+  The olum runtime exports arrive through that same path, with no special
+  casing. `<style>` bodies still get nothing.
 
 The `<script>` block **is** the symbol source that powers navigation *from*
 the template.
@@ -182,10 +183,40 @@ inside `<style>` is still handled by the injected grammar in
 
 ---
 
-## Testing the parser without VS Code
+## Tests
 
-The `parser/`, `scanner/`, `components/` and `language/resolve.ts` modules do not
-import `vscode`, so they can be exercised directly against the compiled output:
+```bash
+npm test        # compile, then run the suite
+npm run test:only   # run the suite against the existing build
+```
+
+The suite runs in plain Node — no editor, no download, no display. `tests/harness.js`
+installs a stub for the `vscode` module before any compiled file is loaded, so
+`out/` can be required directly; it also provides an in-memory `TextDocument`,
+an editor whose `edit()` really mutates that document, and the tiny
+section/✔/✖ runner every suite uses.
+
+| File | Covers |
+|------|--------|
+| `tests/parser.test.js` | scanner, attributes, expressions, `<for>` scopes, raw regions |
+| `tests/symbols.test.js` | every import form, declarations, object members, inferred types |
+| `tests/modules.test.js` | specifier resolution, `exports` maps, the auto-import index |
+| `tests/highlighting.test.js` | expression tokenizer and decoration buckets |
+| `tests/providers.test.js` | hover, definition, references, rename, completion, formatting, diagnostics |
+| `tests/utils.test.js` | helpers, debouncer, and the packaged JSON files |
+| `tests/extension.test.js` | activation, document events, the auto-fix pass, the auto-close guard |
+
+Resolution and indexing are tested against `tests/fixtures/ws`, a small
+self-contained workspace with its own `node_modules`, so results never depend on
+what happens to be installed on the machine. That fixture tree is committed on
+purpose — module resolution has to see a directory literally named
+`node_modules`, hence the negation rules in `.gitignore`.
+
+Adding a suite: write `tests/<area>.test.js` exporting a function (it may be
+async), then list it in `SUITES` in `tests/index.js`.
+
+The `parser/`, `scanner/` and `language/resolve.ts` modules import no `vscode` at
+all, so they can also be poked at directly:
 
 ```js
 const { parse } = require("./out/parser/documentModel");

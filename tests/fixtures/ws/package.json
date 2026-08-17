@@ -1,0 +1,8 @@
+{
+  "name": "fixture-app",
+  "dependencies": {
+    "olum": "*",
+    "olum-store": "*",
+    "olum-icons": "*"
+  }
+}

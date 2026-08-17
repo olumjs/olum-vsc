@@ -24,6 +24,7 @@ import { registerFormattingProvider } from "./language/formatting/formattingProv
 import { registerHoverProvider } from "./language/hover/hoverProvider";
 import { registerReferenceProvider } from "./language/references/referenceProvider";
 import { registerRenameProvider } from "./language/rename/renameProvider";
+import { invalidateExportIndex } from "./modules/exports";
 import { getModel, invalidate } from "./parser/documentModel";
 import { FLOW_TAG_NAMES } from "./parser/types";
 import { escapeRegExp } from "./utils/helpers";
@@ -111,8 +112,18 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  // ── auto-import index invalidation ──────────────────────────────────────────
+  // Workspace `.js` files are re-checked by mtime on a short interval, but an
+  // install or a dependency edit changes which packages exist at all, which no
+  // amount of re-statting the old file list would reveal.
+  const manifestWatcher = vscode.workspace.createFileSystemWatcher("**/package.json");
+  manifestWatcher.onDidChange(invalidateExportIndex);
+  manifestWatcher.onDidCreate(invalidateExportIndex);
+  manifestWatcher.onDidDelete(invalidateExportIndex);
+
   context.subscriptions.push(
     diagCollection,
+    manifestWatcher,
     { dispose: () => { highlightDebouncer.dispose(); diagDebouncer.dispose(); fixDebouncer.dispose(); } },
   );
 }

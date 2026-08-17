@@ -82,7 +82,18 @@ After any formatting pass the extension also runs an auto-repair to undo damage 
 
 | Damage | Repair |
 |--------|--------|
-| `<header>` → component tag lowercased | Restored to `<Header>` |
+| `<card>` where `Card` is imported | Corrected to `<Card>` |
+
+Component names that collide with a real HTML element (`Button`, `Header`,
+`Input`, `Form`, …) are deliberately **left alone**. In a file that imports
+`Button`, a lowercase `<button>` is far more likely to be the HTML element you
+meant to type, and rewriting it would break the page. Nothing about the tag
+itself can tell the two apart, so the extension does not guess.
+
+> Note for **Prettier** users: Prettier lowercases any tag whose name matches a
+> known HTML element, so `<Button>` becomes `<button>` on every format and has to
+> be corrected by hand. The bundled **Olum** formatter does not do this — set
+> `"[html]": { "editor.defaultFormatter": "eissapk.olum" }` to avoid it entirely.
 
 ---
 
@@ -91,13 +102,21 @@ After any formatting pass the extension also runs an auto-repair to undo damage 
 | Location | Action |
 |---|---|
 | Import path — `import Header from "./Header"` | Opens `Header.html` |
+| Import path — `import { cart } from "../utils/cart"` | Opens `cart.js` |
+| Import path — `import { onMount } from "olum"` | Opens the package's entry file |
+| Imported name — the `cart` in that import | Jumps to `export const cart` inside `cart.js` |
+| Imported name used in `<script>` — `cartTotal()` | Same — jumps to its `export` |
 | Component tag — `<Header />` in template | Opens `Header.html` |
+| Imported value in interpolation — `{ArrowRight}` | Jumps to its `export` in the module |
 | Variable in interpolation — `<Comp val="{title}" />` | Jumps to `title` declaration |
 | Property access — `<Comp val="{r.input}" />` | Jumps to `input:` inside the `r` object |
 | Variable in expression attribute — `<button onclick="save(title)">` | Jumps to `title` declaration |
 | `<for>` local — `{todo}` inside a loop body | Jumps to the `each="todo of …"` binding |
 
-> Ctrl+Click on the **path string** in an import (e.g. `"./Header"`) opens the file. Clicking the imported name (`Header`) itself does nothing — the `<script>` block is not analysed for template navigation.
+Specifiers resolve the way Node does: extensionless relative paths pick up
+`.js` / `.mjs` / `.ts` / `.html` (and `index.*` inside a directory), and bare
+specifiers such as `"olum-icons/lucide"` are looked up through `node_modules`,
+honouring the package's `exports` map.
 
 ---
 
@@ -127,8 +146,9 @@ For any symbol used in a template expression — variables, object properties,
   loop body, and same-named outer variables are left untouched.
 - **Peek Definition** (`Alt+F12`) works wherever Go To Definition does.
 
-`<script>` and `<style>` blocks are excluded from all of the above — only the
-framework template is analysed.
+`<style>` blocks are excluded from all of the above, and `<script>` is excluded
+from template analysis — only imports are followed there, so Ctrl+Click on an
+imported name works the way it does in a `.js` file.
 
 ---
 
@@ -140,13 +160,33 @@ framework template is analysed.
 
 **Variables in expressions** — type `{` inside a string attribute or text to open an interpolation and get a dropdown of all `const`/`let`/`var`, `function`, and `this.*` identifiers declared in the current file (the same identifiers are available inside expression-attribute values like `onclick="…"`)
 
-**Olum runtime helpers** — inside a `<script>` block, typing one of the runtime exports suggests a completion that auto-imports it from `"olum"`. Selecting one inserts a ready-to-fill snippet (cursor at `⟨…⟩`) and adds the import — merging into an existing `import { … } from "olum"` line when there is one:
+**Any module symbol** — inside a `<script>` block, typing a name suggests every
+symbol the workspace can export, exactly like auto-import in a `.js` file.
+Selecting one inserts the import for you:
 
-| Type | Inserts | Auto-import |
-|------|---------|-------------|
-| `onMount` | `onMount(() => { ⟨…⟩ })` | `import { onMount } from "olum";` |
-| `props`   | `const {⟨…⟩} = props()`   | `import { props } from "olum";`   |
-| `params`  | `const {⟨…⟩} = params()`  | `import { params } from "olum";`  |
+| You type | You get | Auto-import |
+|---|---|---|
+| `cartTot` | `cartTotal` | `import { cartTotal } from "../utils/cart";` |
+| `ArrowRig` | `ArrowRight` | `import { ArrowRight } from "olum-icons/lucide";` |
+| `onMou` | `onMount` | `import { onMount } from "olum";` |
+| `crossf` | `crossfade` | merged into your existing `import { … } from "olum"` |
+| `createSt` | `createStore` | `import createStore from "olum-store";` |
+
+Two sources feed the list: every `.js` / `.mjs` / `.ts` file in the workspace
+(`node_modules` and build folders excluded), and the packages in your nearest
+`package.json` `dependencies` — entered through each package's `exports`
+subpaths, so `olum-icons/lucide` is offered separately from `olum-icons`.
+Default exports are included. Because a default import binds to whatever name
+you write, each one is offered under both the name its module declares and a
+name taken from where it lives — `export default function createStore` inside
+`store.js` is found by typing either `createStore` or `store`, and both write a
+correct import.
+
+Names already in scope are never suggested, and relative paths are written
+relative to the file you are editing. The olum runtime exports (`onMount`,
+`props`, `params`, `store`, `crossfade`, the router helpers …) arrive through
+this same path — they are ordinary package exports and get no special
+treatment.
 
 ---
 

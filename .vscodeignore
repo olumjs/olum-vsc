@@ -1,0 +1,7 @@
+# The test suite ships a fixture workspace containing a fake `node_modules`
+# tree — useful for running the tests, pure weight inside a published .vsix.
+tests/**
+
+# Never needed inside the package.
+*.vsix
+.vscode-test/**

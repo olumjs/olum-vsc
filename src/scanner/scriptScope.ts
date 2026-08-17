@@ -42,30 +42,25 @@ export function buildSymbolTable(model: ParsedDocument): SymbolTable {
 function extractRegion(src: string, base: number, add: (d: Declaration) => void): void {
   let m: RegExpExecArray | null;
 
-  // ── default imports: import Name from "spec" ──────────────────────────────
-  const importRe = /\bimport\s+([A-Za-z_$][\w$]*)\s+from\s*['"]([^'"]+)['"]/g;
+  // ── imports ───────────────────────────────────────────────────────────────
+  // One pass over every `import … from "spec"` statement, covering the default,
+  // named (with `as` aliases), namespace and mixed forms in a single regex; the
+  // binding clause is then split apart by `addClauseBindings`.
+  // The clause excludes quotes and `;` so a side-effect import cannot swallow
+  // the `from` of the statement after it.
+  const importRe = /\bimport\s+(?:([^'";]*?)\s*from\s*)?(['"])([^'"]+)\2/g;
   while ((m = importRe.exec(src))) {
-    const nameStart = base + m.index + m[0].indexOf(m[1]);
-    const specStart = base + m.index + m[0].indexOf(m[2]);
-    add({ name: m[1], kind: "import", nameStart, nameEnd: nameStart + m[1].length,
-      importSpec: m[2], specStart, specEnd: specStart + m[2].length,
-      doc: docAbove(src, m.index) });
-  }
-
-  // ── named imports: import { a, b } from "spec" ────────────────────────────
-  const namedRe = /\bimport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
-  while ((m = namedRe.exec(src))) {
-    const groupStart = m.index + m[0].indexOf("{") + 1;
-    const specStart = base + m.index + m[0].indexOf(m[2]);
-    const specEnd = specStart + m[2].length;
-    const inner = m[1];
-    const idRe = /([A-Za-z_$][\w$]*)/g;
-    let idm: RegExpExecArray | null;
-    while ((idm = idRe.exec(inner))) {
-      const nameStart = base + groupStart + idm.index;
-      add({ name: idm[1], kind: "import", nameStart, nameEnd: nameStart + idm[1].length,
-        importSpec: m[2], specStart, specEnd });
-    }
+    const clause = m[1];
+    if (!clause) continue; // side-effect import: `import "./styles.css"`
+    const spec = m[3];
+    const clauseStart = m.index + /^import\s+/.exec(m[0])![0].length;
+    const specStart = base + m.index + m[0].lastIndexOf(spec);
+    addClauseBindings(clause, base + clauseStart, {
+      importSpec: spec,
+      specStart,
+      specEnd: specStart + spec.length,
+      doc: docAbove(src, m.index),
+    }, add);
   }
 
   // ── function declarations ─────────────────────────────────────────────────
@@ -117,6 +112,78 @@ function extractRegion(src: string, base: number, add: (d: Declaration) => void)
   while ((m = thisRe.exec(src))) {
     const nameStart = base + m.index + m[0].indexOf(m[1]);
     add({ name: m[1], kind: "property", nameStart, nameEnd: nameStart + m[1].length, type: inferType(m[2]) });
+  }
+}
+
+/** Fields every binding of one import statement shares. */
+interface ImportInfo {
+  importSpec: string;
+  specStart: number;
+  specEnd: number;
+  doc?: string;
+}
+
+/**
+ * Split an import clause into its bindings and register one declaration each.
+ * `base` is the absolute offset of `clause[0]`, so every reported `nameStart`
+ * lands on the binding itself — which is what go-to-definition navigates from.
+ *
+ * Handles `Name`, `{ a, b as c }`, `* as ns`, and the mixed `Name, { a }` /
+ * `Name, * as ns` forms.
+ */
+function addClauseBindings(
+  clause: string,
+  base: number,
+  info: ImportInfo,
+  add: (d: Declaration) => void,
+): void {
+  const common = { kind: "import" as const, ...info };
+  let cursor = 0;
+
+  // Leading default binding, when the clause does not open with `{` or `*`.
+  const firstChar = clause.trim()[0];
+  if (firstChar !== "{" && firstChar !== "*") {
+    const def = /^\s*([A-Za-z_$][\w$]*)/.exec(clause);
+    if (!def) return;
+    const nameStart = base + def[0].length - def[1].length;
+    add({ ...common, name: def[1], nameStart, nameEnd: nameStart + def[1].length, importKind: "default" });
+    const comma = clause.indexOf(",", def[0].length);
+    if (comma === -1) return; // default-only import
+    cursor = comma + 1;
+  }
+
+  const rest = clause.slice(cursor);
+
+  // `* as ns`
+  const ns = /^\s*\*\s*as\s+([A-Za-z_$][\w$]*)/.exec(rest);
+  if (ns) {
+    const nameStart = base + cursor + ns[0].length - ns[1].length;
+    add({ ...common, name: ns[1], nameStart, nameEnd: nameStart + ns[1].length, importKind: "namespace" });
+    return;
+  }
+
+  // `{ a, b as c }`
+  const open = rest.indexOf("{");
+  if (open === -1) return;
+  const close = rest.indexOf("}", open);
+  const inner = rest.slice(open + 1, close === -1 ? rest.length : close);
+  const innerBase = base + cursor + open + 1;
+
+  let partStart = 0;
+  for (const part of inner.split(",")) {
+    const entry = /^(\s*)([A-Za-z_$][\w$]*)(?:(\s+as\s+)([A-Za-z_$][\w$]*))?/.exec(part);
+    if (entry) {
+      const exported = entry[2];
+      const local = entry[4] ?? exported;
+      // Point at the local binding — the alias when renamed, else the export.
+      const localOffset = entry[4] ? entry[1].length + exported.length + entry[3].length : entry[1].length;
+      const nameStart = innerBase + partStart + localOffset;
+      add({
+        ...common, name: local, nameStart, nameEnd: nameStart + local.length,
+        importKind: "named", exportName: exported,
+      });
+    }
+    partStart += part.length + 1; // + the comma we split on
   }
 }
 

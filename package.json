@@ -5,7 +5,7 @@
 	"publisher": "eissapk",
 	"icon": "assets/logo.png",
 	"author": "Eissa Saber",
-	"version": "1.6.4",
+	"version": "1.7.0",
 	"engines": {
 		"vscode": "^1.75.0"
 	},
@@ -138,7 +138,9 @@
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
-		"typecheck": "tsc -p ./ --noEmit"
+		"typecheck": "tsc -p ./ --noEmit",
+		"test": "npm run compile && node tests/index.js",
+		"test:only": "node tests/index.js"
 	},
 	"devDependencies": {
 		"@types/js-beautify": "^1.14.3",

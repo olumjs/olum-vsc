@@ -5,64 +5,26 @@
  *                     `props`, and any enclosing `<for>` locals).
  *   After `<`       → component names; workspace `.html` components are offered
  *                     with an auto-import edit inserted into the `<script>` block.
- *   Inside `<script>` → olum runtime helpers (`onMount`, `props`, `params`),
- *                     each offered with an auto-import edit for `import { … }
- *                     from "olum"`. `onMount` additionally expands to its call
- *                     form `onMount(() => { … })`.
+ *   Inside `<script>` → every symbol exported by a workspace `.js`/`.ts` file or
+ *                     by a package in `dependencies`, each offered with an
+ *                     auto-import edit, the way the TypeScript server does it in
+ *                     a plain `.js` file. That covers the olum runtime exports
+ *                     (`onMount`, `props`, `params`, `store`, …) like any other
+ *                     module, so they need no special-casing here.
  */
 
 import * as path from "path";
 import * as vscode from "vscode";
-import { componentImports } from "../../components/imports";
+import { allImports, componentImports } from "../../components/imports";
+import { importableSymbols, ModuleExport, relativeSpecifier } from "../../modules/exports";
 import { forScopeAt, isInRawRegion } from "../../parser/documentModel";
 import { ParsedDocument } from "../../parser/types";
 import { Declaration, SymbolTable } from "../../scanner/symbols";
 import { escapeRegExp, HTML_SELECTOR, isPascalCase } from "../../utils/helpers";
 import { analyze } from "../services";
 
-/** Module specifier every runtime helper is imported from. */
+/** The olum runtime package. Its exports are script-only, never template values. */
 const OLUM_MODULE = "olum";
-
-/**
- * Named exports the olum runtime provides. Add an entry here to make it
- * auto-importable from `<script>`. When `snippet` is set, selecting the item
- * expands to that snippet (with `$0` as the final cursor) instead of the bare
- * name — useful for callables like `onMount`.
- */
-interface RuntimeHelper {
-  /** Completion label and default filter word (what you type to trigger it). */
-  name: string;
-  /** Named export to import from "olum". Defaults to `name`. */
-  importName?: string;
-  kind: vscode.CompletionItemKind;
-  detail: string;
-  doc: string;
-  snippet?: string;
-}
-
-const OLUM_RUNTIME: RuntimeHelper[] = [
-  {
-    name: "onMount",
-    kind: vscode.CompletionItemKind.Function,
-    detail: 'olum lifecycle — auto-import from "olum"',
-    doc: 'Runs a callback once the component has mounted.\n\nAdds `import { onMount } from "olum"`.',
-    snippet: "onMount(() => {\n\t$0\n})",
-  },
-  {
-    name: "props",
-    kind: vscode.CompletionItemKind.Snippet,
-    detail: 'olum runtime — destructure props(), auto-import from "olum"',
-    doc: 'Destructures the component props.\n\nExpands to `const {} = props()` and adds `import { props } from "olum"`.',
-    snippet: "const {$1} = props()$0",
-  },
-  {
-    name: "params",
-    kind: vscode.CompletionItemKind.Snippet,
-    detail: 'olum runtime — destructure params(), auto-import from "olum"',
-    doc: 'Destructures the route params.\n\nExpands to `const {} = params()` and adds `import { params } from "olum"`.',
-    snippet: "const {$1} = params()$0",
-  },
-];
 
 const KIND_MAP: Partial<Record<Declaration["kind"], vscode.CompletionItemKind>> = {
   function: vscode.CompletionItemKind.Function,
@@ -80,7 +42,7 @@ class OlumCompletionProvider implements vscode.CompletionItemProvider {
   async provideCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
-  ): Promise<vscode.CompletionItem[] | null> {
+  ): Promise<vscode.CompletionItem[] | vscode.CompletionList | null> {
     const offset = document.offsetAt(position);
     const { model, symbols } = analyze(document);
     const line = document.lineAt(position.line).text;
@@ -90,10 +52,14 @@ class OlumCompletionProvider implements vscode.CompletionItemProvider {
     if (isInRawRegion(model, offset)) {
       if (!isInScriptRegion(model, offset)) return null; // inside <style> → nothing
       // `{` is a trigger char for markup template expressions; inside <script>
-      // it starts an object literal/block, so don't surface runtime helpers
-      // (avoids `const state = {onMount}`).
+      // it opens an object literal or a block, where an import suggestion is
+      // just noise (avoids `const state = {onMount}`).
       if (before.trimEnd().endsWith("{")) return null;
-      return runtimeCompletions(document, model, symbols);
+      if (isInsideImportStatement(before)) return null; // VS Code handles the path itself
+      const items = await autoImportCompletions(document, model, symbols, wordBefore(before));
+      // Marked incomplete so VS Code re-queries as the word grows: the
+      // auto-import list is capped, and a longer prefix reaches further into it.
+      return new vscode.CompletionList(items, true);
     }
 
     // ── inside a {expression} ────────────────────────────────────────────────
@@ -176,14 +142,18 @@ function identifierCompletions(
   if (scope) for (const local of scope.locals) add(local.name, vscode.CompletionItemKind.Variable, "<for> local");
 
   for (const decl of symbols.byName.values()) {
-    if (decl.kind === "import" && !isPascalCase(decl.name)) {
+    if (decl.kind === "import") {
       // olum runtime helpers (onMount, props, params) are script-only; they are
       // not meaningful values inside a template `{expression}`.
       if (decl.importSpec === OLUM_MODULE) continue;
+      // A PascalCase *default* import is a component — offered after `<`, not as
+      // a value. A PascalCase *named* import is an ordinary value though
+      // (`import { ArrowRight } from "olum-icons"` → `{ArrowRight}`).
+      const isComponent = isPascalCase(decl.name) && decl.importKind !== "named" && decl.importKind !== "namespace";
+      if (isComponent) continue;
       add(decl.name, vscode.CompletionItemKind.Module);
       continue;
     }
-    if (decl.kind === "import") continue; // PascalCase imports are components, not values
     add(decl.name, KIND_MAP[decl.kind] ?? vscode.CompletionItemKind.Variable);
   }
 
@@ -195,63 +165,147 @@ function isInScriptRegion(model: ParsedDocument, offset: number): boolean {
   return model.scriptRegions.some((r) => offset >= r.start && offset < r.end);
 }
 
-/**
- * Completions for the olum runtime helpers (`onMount`, `props`, `params`),
- * each carrying an auto-import edit so selecting one imports it from `"olum"`.
- */
-function runtimeCompletions(
-  document: vscode.TextDocument,
-  model: ParsedDocument,
-  symbols: SymbolTable,
-): vscode.CompletionItem[] {
-  return OLUM_RUNTIME.map((helper) => {
-    const item = new vscode.CompletionItem(helper.name, helper.kind);
-    item.detail = helper.detail;
-    item.documentation = new vscode.MarkdownString(helper.doc);
-    if (helper.snippet) item.insertText = new vscode.SnippetString(helper.snippet);
-    const edit = olumImportEdit(document, model, symbols, helper.importName ?? helper.name);
-    if (edit) item.additionalTextEdits = [edit];
-    return item;
-  });
+/** The identifier being typed, i.e. the word ending at the cursor. */
+function wordBefore(before: string): string {
+  const m = /[A-Za-z_$][\w$]*$/.exec(before);
+  return m ? m[0] : "";
 }
 
 /**
- * A `TextEdit` that makes `name` available as a named import from `"olum"`,
- * or `null` when it is already imported. Prefers merging into an existing
- * `import { … } from "olum"` statement; otherwise adds a fresh import line.
+ * True while the cursor sits in an `import …` statement, where the useful
+ * completion is a module path — VS Code's own path IntelliSense — not another
+ * import suggestion.
  */
-function olumImportEdit(
+function isInsideImportStatement(before: string): boolean {
+  return /^\s*(import|export)\b/.test(before);
+}
+
+/** How many auto-import suggestions to offer at once. */
+const MAX_AUTO_IMPORTS = 250;
+
+/**
+ * Auto-import suggestions for every symbol the workspace exports but this file
+ * has not imported yet. Requires at least one typed character: without a prefix
+ * the list is meaningless noise on top of the editor's own suggestions.
+ */
+async function autoImportCompletions(
   document: vscode.TextDocument,
   model: ParsedDocument,
   symbols: SymbolTable,
+  prefix: string,
+): Promise<vscode.CompletionItem[]> {
+  if (prefix.length < 1) return [];
+
+  const fromFile = document.uri.fsPath;
+  const fromDir = path.dirname(fromFile);
+  // Synthetic symbols (`props`) are implicit in the *template* only — inside
+  // `<script>` they still have to be imported, so they must stay suggestible.
+  const declared = new Set(
+    [...symbols.byName.values()].filter((d) => !d.synthetic).map((d) => d.name),
+  );
+  const lower = prefix.toLowerCase();
+
+  const items: vscode.CompletionItem[] = [];
+  const seen = new Set<string>();
+
+  for (const exp of await importableSymbols(fromFile)) {
+    if (declared.has(exp.name)) continue; // already in scope
+    if (!exp.name.toLowerCase().startsWith(lower)) continue;
+
+    const spec = exp.spec ?? relativeSpecifier(fromDir, exp.file);
+    const key = `${exp.name} ${spec}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    items.push(autoImportItem(document, model, symbols, exp, spec));
+    if (items.length >= MAX_AUTO_IMPORTS) break;
+  }
+
+  return items;
+}
+
+function autoImportItem(
+  document: vscode.TextDocument,
+  model: ParsedDocument,
+  symbols: SymbolTable,
+  exp: ModuleExport,
+  spec: string,
+): vscode.CompletionItem {
+  const item = new vscode.CompletionItem(
+    exp.name,
+    isPascalCase(exp.name) ? vscode.CompletionItemKind.Class : vscode.CompletionItemKind.Variable,
+  );
+  item.detail = `auto-import from ${spec}`;
+  const statement = exp.isDefault
+    ? `import ${exp.name} from "${spec}"`
+    : `import { ${exp.name} } from "${spec}"`;
+  item.documentation = new vscode.MarkdownString(`Adds \`${statement}\``);
+  // Rank below symbols already in scope, matching how the TS server orders its
+  // own auto-imports.
+  item.sortText = `zz${exp.name}`;
+
+  const edit = exp.isDefault
+    ? defaultImportEdit(document, model, symbols, spec, exp.name)
+    : namedImportEdit(document, model, symbols, spec, exp.name);
+  if (edit) item.additionalTextEdits = [edit];
+  return item;
+}
+
+/** An edit adding `import Name from "spec"`, or null when it already exists. */
+function defaultImportEdit(
+  document: vscode.TextDocument,
+  model: ParsedDocument,
+  symbols: SymbolTable,
+  spec: string,
+  name: string,
+): vscode.TextEdit | null {
+  const insert = computeImportInsert(document, model, symbols);
+  if (!insert) return null;
+  return vscode.TextEdit.insert(
+    insert.position,
+    `${insert.prefix}import ${name} from "${spec}";${insert.suffix}`,
+  );
+}
+
+/**
+ * A `TextEdit` that makes `name` available as a named import from `spec`, or
+ * `null` when it is already imported. Prefers merging into an existing
+ * `import { … } from "<spec>"` statement; otherwise adds a fresh import line.
+ */
+function namedImportEdit(
+  document: vscode.TextDocument,
+  model: ParsedDocument,
+  symbols: SymbolTable,
+  spec: string,
   name: string,
 ): vscode.TextEdit | null {
   for (const decl of symbols.byName.values()) {
-    if (decl.kind === "import" && decl.importSpec === OLUM_MODULE && decl.name === name) return null;
+    if (decl.kind === "import" && decl.importSpec === spec && decl.name === name) return null;
   }
 
-  const merge = mergeIntoOlumImport(document, model, name);
+  const merge = mergeIntoNamedImport(document, model, spec, name);
   if (merge) return merge;
 
   const insert = computeImportInsert(document, model, symbols);
   if (!insert) return null;
   return vscode.TextEdit.insert(
     insert.position,
-    `${insert.prefix}import { ${name} } from "${OLUM_MODULE}";${insert.suffix}`,
+    `${insert.prefix}import { ${name} } from "${spec}";${insert.suffix}`,
   );
 }
 
 /**
- * If a `import { … } from "olum"` statement already exists, return an edit that
- * adds `name` to its brace group (unless already present). Returns `null` when
- * no such statement exists.
+ * If an `import { … } from "<spec>"` statement already exists, return an edit
+ * that adds `name` to its brace group (unless already present). Returns `null`
+ * when no such statement exists.
  */
-function mergeIntoOlumImport(
+function mergeIntoNamedImport(
   document: vscode.TextDocument,
   model: ParsedDocument,
+  spec: string,
   name: string,
 ): vscode.TextEdit | null {
-  const re = new RegExp(`\\bimport\\s*\\{([^}]*)\\}\\s*from\\s*['"]${escapeRegExp(OLUM_MODULE)}['"]`, "g");
+  const re = new RegExp(`\\bimport\\s*\\{([^}]*)\\}\\s*from\\s*['"]${escapeRegExp(spec)}['"]`, "g");
   for (const region of model.scriptRegions) {
     const src = model.text.slice(region.start, region.end);
     let m: RegExpExecArray | null;
@@ -288,9 +342,11 @@ function computeImportInsert(
   model: ParsedDocument,
   symbols: SymbolTable,
 ): ImportInsert | null {
-  const imports = componentImports(symbols);
+  const imports = allImports(symbols);
   if (imports.length) {
-    const lastEnd = Math.max(...imports.map((i) => i.nameEnd));
+    // The specifier ends the statement, so its end is a safer anchor than the
+    // binding's — `import { a, b } from "x"` would otherwise anchor on `a`.
+    const lastEnd = Math.max(...imports.map((i) => i.specEnd ?? i.nameEnd));
     const pos = document.positionAt(lastEnd);
     const lineEnd = document.lineAt(pos.line).range.end;
     return { position: lineEnd, prefix: "\n", suffix: "" };

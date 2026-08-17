@@ -2,3 +2,8 @@ node_modules/
 out/
 *.vsix
 .DS_Store
+
+# Test fixtures deliberately ship a fake node_modules — module resolution has to
+# see a directory with that exact name, so it cannot be renamed out of the way.
+!tests/fixtures/**/node_modules/
+!tests/fixtures/**/node_modules/**

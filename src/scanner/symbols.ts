@@ -23,6 +23,13 @@ export interface Declaration {
   doc?: string;
   /** Module specifier for imports. */
   importSpec?: string;
+  /** Which import form introduced the binding. */
+  importKind?: "default" | "named" | "namespace";
+  /**
+   * Name the module actually exports, which differs from `name` when the import
+   * is aliased (`import { cart as basket }` → name `basket`, export `cart`).
+   */
+  exportName?: string;
   /** Absolute offsets of the specifier string content (excluding quotes), for import declarations. */
   specStart?: number;
   specEnd?: number;
